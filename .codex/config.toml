@@ -1,0 +1,8 @@
+default_permissions = "project-with-protected-notes"
+
+[permissions.project-with-protected-notes]
+description = "Allow normal project edits while keeping NOTES.md read-only."
+extends = ":workspace"
+
+[permissions.project-with-protected-notes.filesystem.":workspace_roots"]
+"NOTES.md" = "read"
