@@ -2,7 +2,8 @@
 
 A minimal Chrome extension for improving the University of Maryland Canvas
 dashboard. It currently hides the dashboard's secondary right-hand panel and
-allows the main content area to use the space that the panel occupied.
+allows the main content area to use the space that the panel occupied. The
+Global Navigation Menu is limited to Account, Dashboard, and Inbox.
 
 ## Load the extension in Chrome
 

@@ -7,3 +7,9 @@
 body.with-right-side:has(#dashboard) #content-wrapper {
   margin-right: 0 !important;
 }
+
+/* Keep only Account, Dashboard, and Inbox in Canvas's Global Navigation Menu. */
+.ic-app-header__main-navigation
+  .ic-app-header__menu-list-item:not(:has(#global_nav_profile_link, #global_nav_dashboard_link, #global_nav_conversations_link)) {
+  display: none !important;
+}
