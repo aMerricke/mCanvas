@@ -1,1 +1,9 @@
-/* Dashboard enhancements will be added here. */
+/* Hide the dashboard's secondary right-hand panel without affecting other pages. */
+#application:has(#dashboard) #right-side-wrapper {
+  display: none !important;
+}
+
+/* Canvas reserves this margin when the body has its `with-right-side` class. */
+body.with-right-side:has(#dashboard) #content-wrapper {
+  margin-right: 0 !important;
+}

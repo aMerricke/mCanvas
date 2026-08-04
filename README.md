@@ -1,8 +1,8 @@
 # Simple Canvas
 
-A minimal Chrome extension scaffold for improving the University of Maryland
-Canvas dashboard. It currently leaves the dashboard's default appearance
-unchanged.
+A minimal Chrome extension for improving the University of Maryland Canvas
+dashboard. It currently hides the dashboard's secondary right-hand panel and
+allows the main content area to use the space that the panel occupied.
 
 ## Load the extension in Chrome
 
