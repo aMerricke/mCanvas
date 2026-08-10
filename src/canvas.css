@@ -1,3 +1,5 @@
+/* Dashboard */
+
 /* Hide the dashboard's secondary right-hand panel without affecting other pages. */
 #application:has(#dashboard) #right-side-wrapper {
   display: none !important;
@@ -7,6 +9,20 @@
 body.with-right-side:has(#dashboard) #content-wrapper {
   margin-right: 0 !important;
 }
+
+/* Course home */
+
+/* Hide the secondary panel on course home pages only. */
+#application:has(#course_home_content) #right-side-wrapper {
+  display: none !important;
+}
+
+/* Let the course home content use the space reserved for the secondary panel. */
+body.with-right-side:has(#course_home_content) #content-wrapper {
+  margin-right: 0 !important;
+}
+
+/* All Canvas pages */
 
 /* Keep only Account, Dashboard, and Inbox in Canvas's Global Navigation Menu. */
 .ic-app-header__main-navigation

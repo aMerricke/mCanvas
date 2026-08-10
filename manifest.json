@@ -2,14 +2,14 @@
   "manifest_version": 3,
   "name": "Simple Canvas",
   "version": "0.1.0",
-  "description": "A small visual enhancement for the UMD Canvas dashboard.",
+  "description": "An extension that limits the amount of panels displayed on Canvas pages to reduce visual noise.",
   "content_scripts": [
     {
       "matches": [
         "https://umd.instructure.com/*"
       ],
       "css": [
-        "src/dashboard.css"
+        "src/canvas.css"
       ],
       "run_at": "document_start"
     }

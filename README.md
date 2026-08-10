@@ -1,9 +1,10 @@
 # Simple Canvas
 
 A minimal Chrome extension for improving the University of Maryland Canvas
-dashboard. It currently hides the dashboard's secondary right-hand panel and
-allows the main content area to use the space that the panel occupied. The
-Global Navigation Menu is limited to Account, Dashboard, and Inbox.
+interface. It hides the secondary right-hand panel on the dashboard and course
+home pages, allowing the main content area to use the space that the panel
+occupied. The Global Navigation Menu is limited to Account, Dashboard, and
+Inbox.
 
 ## Load the extension in Chrome
 
@@ -14,7 +15,7 @@ Global Navigation Menu is limited to Account, Dashboard, and Inbox.
 5. Open or refresh <https://umd.instructure.com/>.
 
 After changing an extension file, return to `chrome://extensions`, select the
-reload button on the Simple Canvas card, and refresh the Canvas dashboard.
+reload button on the Simple Canvas card, and refresh the Canvas page.
 
 ## Remove or disable it
 
