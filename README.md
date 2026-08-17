@@ -1,23 +1,37 @@
-# Simple Canvas
+# mCanvas
 
-A minimal Chrome extension for improving the University of Maryland Canvas
-interface. It hides the secondary right-hand panel on the dashboard and course
-home pages, allowing the main content area to use the space that the panel
-occupied. The Global Navigation Menu is limited to Account, Dashboard, and
-Inbox.
+Assignment tracker and configuration tools for the Canvas LMS.
 
-## Load the extension in Chrome
+Currently in development before first release to the Chrome Web Store.
 
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode** in the upper-right corner.
-3. Select **Load unpacked**.
-4. Select this project directory (the directory containing `manifest.json`).
-5. Open or refresh <https://umd.instructure.com/>.
+Planned features of nav bar customization, sidebar customization, color
+customization, and an assignment tracker widget for the sidebar.
 
-After changing an extension file, return to `chrome://extensions`, select the
-reload button on the Simple Canvas card, and refresh the Canvas page.
+## Motive
 
-## Remove or disable it
+I find that the Canvas LMS can be moderately unpleasant to use, as it has too
+many (mostly) useless buttons that clog up my brain with visual noise, no dark 
+mode, and no convenient central location for the tracking of assignments and
+their due dates.
 
-Use the toggle on the Simple Canvas card at `chrome://extensions`, or select
-**Remove**. The extension does not modify Canvas data or store user data.
+Previously I had used BetterCampus to mitigate these issues, but as of the
+end of Spring 2026 I became somewhat jaded with their freemium setup, and
+was starting to feel as if the extension was actually adding complications
+to my course interactions, instead of removing them.
+
+Thus, the decision to develop a Chrome extension to make it possible to hide
+the buttons that I don't want to see, allow for freedom of color configuration,
+and to track assignments centrally.
+
+## Roadmap
+
+* Make global navigation menu configurable
+* Make course navigation menus configurable
+* Make dashboard sidebar configurable
+* Make course sidebars configurable
+* Add dark mode + general color configuration
+* Add assignment tracker
+
+## Acknowledgement of AI Use
+
+I am using Codex to build this extension.

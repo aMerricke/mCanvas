@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Simple Canvas",
+  "name": "mCanvas",
   "version": "0.1.0",
-  "description": "An extension that limits the amount of panels displayed on Canvas pages to reduce visual noise.",
+  "description": "Assignment tracker and customization tools for Canvas LMS.",
   "content_scripts": [
     {
       "matches": [
-        "https://umd.instructure.com/*"
+        "https://*.instructure.com/*"
       ],
       "css": [
         "src/canvas.css"
