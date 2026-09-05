@@ -24,6 +24,17 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
 
 /* mCanvas global-navigation configuration */
 
+.ic-app-header__main-navigation:not(.mcanvas-navigation-ready) {
+  animation: mcanvas-navigation-failsafe 0s 2s forwards;
+  visibility: hidden;
+}
+
+@keyframes mcanvas-navigation-failsafe {
+  to {
+    visibility: visible;
+  }
+}
+
 .ic-app-header__main-navigation .ic-app-header__menu-list:has(.mcanvas-navigation-item) {
   display: flex;
   flex-direction: column;
@@ -44,6 +55,34 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
   cursor: pointer;
   font: inherit;
   width: 100%;
+}
+
+.mcanvas-overflow-hidden {
+  display: none !important;
+}
+
+.mcanvas-overflow-toggle {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  min-height: 32px;
+  padding-block: 2px;
+  position: relative;
+  width: 100%;
+}
+
+.mcanvas-overflow-dots {
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: -8px 0 currentColor, 8px 0 currentColor;
+  display: block;
+  height: 4px;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 4px;
 }
 
 .mcanvas-navigation-icon {
@@ -90,18 +129,165 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
   font: inherit;
   font-size: 1.35rem;
   font-weight: 700;
-  margin: 0 0 8px;
-}
-
-.mcanvas-config-description {
-  color: #d8e1e8;
-  font-size: 0.875rem;
-  line-height: 1.5;
   margin: 0;
 }
 
+.mcanvas-config-header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin: 0 0 8px;
+}
+
+.mcanvas-config-restore-button {
+  background: transparent;
+  border: 1px solid #8996a3;
+  border-radius: 4px;
+  color: #d8e1e8;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.6875rem;
+  padding: 5px 8px;
+}
+
+.mcanvas-config-restore-button:hover {
+  background: rgb(255 255 255 / 6%);
+  border-color: #d8e1e8;
+}
+
+.mcanvas-config-keyboard-tip {
+  color: #8996a3;
+  font-size: 0.625rem;
+  line-height: 1.3;
+  margin: 0 0 20px;
+}
+
+.mcanvas-config-keyboard-tip code {
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid #3c4a57;
+  border-radius: 3px;
+  color: #d8e1e8;
+  font: inherit;
+  padding: 0 3px;
+}
+
+.mcanvas-sr-only {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.mcanvas-config-tab-group + .mcanvas-config-tab-group {
+  margin-top: 14px;
+}
+
+.mcanvas-config-group-heading {
+  color: #aeb8c2;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  margin: 0;
+  padding: 5px 4px;
+}
+
+.mcanvas-config-tab-list {
+  border-bottom: 1px solid #3c4a57;
+  list-style: none;
+  margin: 0;
+  min-height: 28px;
+  padding: 0;
+}
+
+.mcanvas-config-tab-list:not(:has(.mcanvas-config-tab-row)):not(:has(.mcanvas-config-drop-placeholder))::after {
+  color: #8996a3;
+  content: "None";
+  display: block;
+  font-size: 0.8rem;
+  font-style: italic;
+  padding: 10px 4px;
+}
+
+.mcanvas-config-tab-row {
+  align-items: center;
+  border-top: 1px solid #3c4a57;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  line-height: 1.4;
+  padding: 10px 4px;
+  touch-action: none;
+  transition: background-color 120ms ease-in-out;
+  user-select: none;
+}
+
+.mcanvas-config-tab-row:hover:not(.mcanvas-config-tab-row-dragging) {
+  background: rgb(255 255 255 / 6%);
+}
+
+.mcanvas-config-tab-row-dragging {
+  cursor: grabbing;
+  opacity: 0.45;
+}
+
+.mcanvas-config-floating-list {
+  background: #11161c;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  box-sizing: border-box;
+  list-style: none;
+  margin: 0;
+  opacity: 0.92;
+  padding: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 100002;
+}
+
+.mcanvas-config-drop-placeholder {
+  background: rgb(255 255 255 / 8%);
+  border: 1px dashed #aeb8c2;
+  box-sizing: border-box;
+  list-style: none;
+}
+
+.mcanvas-config-drag-handle {
+  color: #aeb8c2;
+  cursor: grab;
+  font-size: 1.2rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.mcanvas-config-tab-row-dragging .mcanvas-config-drag-handle {
+  cursor: grabbing;
+}
+
+.mcanvas-config-tab-name {
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcanvas-config-tab-row input {
+  accent-color: #fff;
+  flex: 0 0 auto;
+  height: 18px;
+  margin: 0;
+  width: 18px;
+}
+
 .mcanvas-navigation-button:focus-visible,
-.mcanvas-config-heading:focus-visible {
+.mcanvas-overflow-toggle:focus-visible,
+.mcanvas-config-restore-button:focus-visible,
+.mcanvas-config-tab-row:focus-visible,
+.mcanvas-config-tab-row input:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 2px;
 }

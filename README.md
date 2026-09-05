@@ -25,7 +25,7 @@ and to track assignments centrally.
 
 ## Roadmap
 
-* Make global navigation menu configurable
+* Make global navigation menu configurable [done]
 * Make course navigation menus configurable
 * Make dashboard sidebar configurable
 * Make course sidebars configurable

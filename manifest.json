@@ -3,6 +3,9 @@
   "name": "mCanvas",
   "version": "0.1.0",
   "description": "Assignment tracker and customization tools for Canvas LMS.",
+  "permissions": [
+    "storage"
+  ],
   "content_scripts": [
     {
       "matches": [
