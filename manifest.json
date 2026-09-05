@@ -11,6 +11,9 @@
       "css": [
         "src/canvas.css"
       ],
+      "js": [
+        "src/canvas.js"
+      ],
       "run_at": "document_start"
     }
   ]
