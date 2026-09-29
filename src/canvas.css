@@ -200,16 +200,6 @@
   border-bottom-color: #fff;
 }
 
-.mcanvas-config-placeholder-panel {
-  color: #aeb8c2;
-  min-height: 160px;
-  padding: 12px 4px;
-}
-
-.mcanvas-config-placeholder-panel p {
-  margin: 0 0 12px;
-}
-
 .mcanvas-config-footer {
   align-items: center;
   display: flex;
@@ -308,6 +298,12 @@
 
 .mcanvas-config-tab-row:hover:not(.mcanvas-config-tab-row-dragging) {
   background: rgb(255 255 255 / 6%);
+}
+
+.mcanvas-config-static-row {
+  cursor: pointer;
+  grid-template-columns: minmax(0, 1fr) auto;
+  touch-action: auto;
 }
 
 .mcanvas-config-tab-row-dragging {

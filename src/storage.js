@@ -42,17 +42,6 @@ function setSyncStorage(values, warning) {
   }
 }
 
-function removeSyncStorage(key, warning) {
-  try {
-    if (!chrome.runtime?.id) return;
-    chrome.storage.sync.remove(key, () => {
-      if (chrome.runtime.lastError) console.warn(warning, chrome.runtime.lastError.message);
-    });
-  } catch (error) {
-    if (error?.message !== "Extension context invalidated.") console.warn(warning, error);
-  }
-}
-
 function readSettings() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(STORAGE_KEY, (result) => {
@@ -87,9 +76,7 @@ function normalizedSidebarSettings(stored) {
     order: Array.isArray(stored?.order) ? stored.order.filter((key) => knownKeys.has(key)) : [],
     hidden: Array.isArray(stored?.hidden)
       ? stored.hidden.filter((key) => knownKeys.has(key))
-      : stored
-        ? []
-        : [...sidebarDefaultHidden],
+      : [],
   };
 }
 
@@ -115,11 +102,6 @@ function writeSidebarSettings() {
     { [SIDEBAR_STORAGE_KEY]: savedSidebarSettings },
     "mCanvas could not save sidebar settings:"
   );
-}
-
-function clearSidebarSettings() {
-  savedSidebarSettings = normalizedSidebarSettings();
-  removeSyncStorage(SIDEBAR_STORAGE_KEY, "mCanvas could not clear sidebar settings:");
 }
 
 function readCourseSettings() {

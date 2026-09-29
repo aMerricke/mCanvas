@@ -12,13 +12,11 @@ const STORAGE_KEY = "globalNavigation";
 const COURSE_STORAGE_KEY = "courseNavigation";
 const SIDEBAR_STORAGE_KEY = "globalSidebar";
 const MCANVAS_TODO_KEY = "mcanvas:todo";
-const CANVAS_SIDEBAR_KEY = "canvas:sidebar";
 const GLOBAL_EXPANSION_KEY = "mcanvas:globalNavigationExpanded";
 const COURSE_EXPANSION_KEY_PREFIX = "mcanvas:courseNavigationExpanded:";
 
 const defaultOrder = [];
-const sidebarDefaultOrder = [MCANVAS_TODO_KEY, CANVAS_SIDEBAR_KEY];
-const sidebarDefaultHidden = [CANVAS_SIDEBAR_KEY];
+const sidebarDefaultOrder = [MCANVAS_TODO_KEY];
 let navigationModel = [];
 let sidebarModel = [];
 let dialogEscapeHandler;

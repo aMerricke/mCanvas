@@ -11,7 +11,6 @@ function buildSidebarModel() {
     const positions = new Map(preferredOrder.map((key, index) => [key, index]));
     sidebarModel = [
       { key: MCANVAS_TODO_KEY, label: "To-do list" },
-      { key: CANVAS_SIDEBAR_KEY, label: "Native Canvas sidebar content" },
     ]
       .map((item) => ({
         ...item,
@@ -339,21 +338,17 @@ function buildSidebarModel() {
     );
     const itemsByKey = new Map(sidebarModel.map((item) => [item.key, item]));
     const todoVisible = itemsByKey.get(MCANVAS_TODO_KEY)?.visibility !== "overflow";
-    const canvasVisible = itemsByKey.get(CANVAS_SIDEBAR_KEY)?.visibility !== "overflow";
 
     todoPlaceholder.classList.toggle(SIDEBAR_HIDDEN_CLASS, !todoVisible);
-    container.classList.toggle("mcanvas-native-sidebar-hidden", !canvasVisible);
+    container.classList.add("mcanvas-native-sidebar-hidden");
     for (const element of canvasElements) {
-      element.classList.toggle(SIDEBAR_HIDDEN_CLASS, !canvasVisible);
+      element.classList.add(SIDEBAR_HIDDEN_CLASS);
     }
-    const todoComesFirst = sidebarModel.findIndex((item) => item.key === MCANVAS_TODO_KEY) <
-      sidebarModel.findIndex((item) => item.key === CANVAS_SIDEBAR_KEY);
-    if (todoComesFirst) container.prepend(todoPlaceholder);
-    else container.append(todoPlaceholder);
+    container.prepend(todoPlaceholder);
 
     document.body?.classList.toggle(
       "mcanvas-sidebar-empty",
-      !todoVisible && (!canvasVisible || canvasElements.length === 0)
+      !todoVisible
     );
   }
 
@@ -558,14 +553,6 @@ function buildSidebarModel() {
     let courseEditorModel = [];
     let courseEditorDefaultOrder = [];
     let courseEditorDefaultVisibility = new Map();
-    let sidebarEditorModel = sidebarModel;
-    const sidebarEditorDefaultOrder = [...sidebarDefaultOrder];
-    const sidebarEditorDefaultVisibility = new Map(
-      sidebarModel.map((item) => [
-        item.key,
-        sidebarDefaultHidden.includes(item.key) ? "overflow" : "primary",
-      ])
-    );
     if (requestedCourseId) {
       try {
         const courseModels = await loadCourseModels(requestedCourseId);
@@ -591,8 +578,6 @@ function buildSidebarModel() {
         <div class="mcanvas-config-panel-tabs" role="tablist" aria-label="Configuration section">
           <button id="mcanvas-global-navigation-tab" role="tab" aria-selected="false" aria-controls="mcanvas-global-navigation-panel" tabindex="-1" type="button" data-panel="global-navigation">Global nav</button>
           <button id="mcanvas-course-navigation-tab" role="tab" aria-selected="false" aria-controls="mcanvas-course-navigation-panel" tabindex="-1" type="button" data-panel="course-navigation">Course nav</button>
-          <button id="mcanvas-sidebar-tab" role="tab" aria-selected="false" aria-controls="mcanvas-sidebar-panel" tabindex="-1" type="button" data-panel="sidebar">Sidebar</button>
-          <button id="mcanvas-theme-tab" role="tab" aria-selected="false" aria-controls="mcanvas-theme-panel" tabindex="-1" type="button" data-panel="theme">Theme</button>
           <button id="mcanvas-todo-tab" role="tab" aria-selected="false" aria-controls="mcanvas-todo-panel" tabindex="-1" type="button" data-panel="todo">To-do list</button>
         </div>
         <p class="mcanvas-sr-only" aria-live="polite" aria-atomic="true"></p>
@@ -628,33 +613,25 @@ function buildSidebarModel() {
             <button class="mcanvas-config-restore-button" type="button" data-panel="course-navigation">Restore Defaults</button>
           </footer>
         </div>
-        <div id="mcanvas-sidebar-panel" role="tabpanel" aria-labelledby="mcanvas-sidebar-tab" data-panel="sidebar" hidden>
-            <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-sidebar-visible-heading">
-              <h3 class="mcanvas-config-group-heading" id="mcanvas-sidebar-visible-heading">Visible</h3>
-              <ul class="mcanvas-config-tab-list" data-visibility="primary"></ul>
-            </section>
-            <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-sidebar-hidden-heading">
-              <h3 class="mcanvas-config-group-heading" id="mcanvas-sidebar-hidden-heading">Hidden</h3>
-              <ul class="mcanvas-config-tab-list" data-visibility="overflow"></ul>
-            </section>
-            <footer class="mcanvas-config-footer">
-              <p class="mcanvas-config-keyboard-tip"><code>↑/↓</code> to focus · <code>Alt + ↑/↓</code> to reorder</p>
-              <button class="mcanvas-config-restore-button" type="button" data-panel="sidebar">Restore Defaults</button>
-            </footer>
-        </div>
-        <div id="mcanvas-theme-panel" class="mcanvas-config-placeholder-panel" role="tabpanel" aria-labelledby="mcanvas-theme-tab" data-panel="theme" hidden>
-          <p>Theme configuration is coming soon.</p>
-        </div>
-        <div id="mcanvas-todo-panel" class="mcanvas-config-placeholder-panel" role="tabpanel" aria-labelledby="mcanvas-todo-tab" data-panel="todo" hidden>
-          <p>To-do list configuration is coming soon.</p>
-          <p>Visibility and placement are controlled in Sidebar.</p>
+        <div id="mcanvas-todo-panel" role="tabpanel" aria-labelledby="mcanvas-todo-tab" data-panel="todo" hidden>
+          <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-todo-visibility-heading">
+            <h3 class="mcanvas-config-group-heading" id="mcanvas-todo-visibility-heading">Visibility</h3>
+            <ul class="mcanvas-config-tab-list">
+              <li class="mcanvas-config-tab-row mcanvas-config-static-row" tabindex="0">
+                <span class="mcanvas-config-tab-name">Show assignment tracker</span>
+                <input id="mcanvas-todo-visible" type="checkbox" role="switch" aria-label="Show assignment tracker">
+              </li>
+            </ul>
+          </section>
         </div>
       </section>`;
 
-    const tabLists = [...backdrop.querySelectorAll(".mcanvas-config-tab-list")];
+    const tabLists = [...backdrop.querySelectorAll(".mcanvas-config-tab-list[data-visibility]")];
     const dialog = backdrop.querySelector(".mcanvas-config-dialog");
     const courseSelect = backdrop.querySelector("#mcanvas-course-context");
     const restoreButtons = [...backdrop.querySelectorAll(".mcanvas-config-restore-button")];
+    const todoVisibilityToggle = backdrop.querySelector("#mcanvas-todo-visible");
+    const todoVisibilityRow = todoVisibilityToggle.closest(".mcanvas-config-static-row");
     const announcer = backdrop.querySelector(".mcanvas-sr-only");
     let dragSession;
     let suppressClick = false;
@@ -715,6 +692,9 @@ function buildSidebarModel() {
     }
 
     populateCourseSelect();
+    todoVisibilityToggle.checked = sidebarModel.find(
+      (item) => item.key === MCANVAS_TODO_KEY
+    )?.visibility !== "overflow";
 
     const panelTabs = [...backdrop.querySelectorAll('.mcanvas-config-panel-tabs [role="tab"]')];
 
@@ -782,14 +762,12 @@ function buildSidebarModel() {
     }
 
     function modelForPanel(panelName) {
-      if (panelName === "sidebar") return sidebarEditorModel;
       if (panelName === "course-navigation") return courseEditorModel;
       return globalEditorModel;
     }
 
     function setModelForPanel(panelName, model) {
-      if (panelName === "sidebar") sidebarEditorModel = model;
-      else if (panelName === "course-navigation") courseEditorModel = model;
+      if (panelName === "course-navigation") courseEditorModel = model;
       else globalEditorModel = model;
     }
 
@@ -825,10 +803,7 @@ function buildSidebarModel() {
       const nextModel = [...configured, ...unlisted];
       setModelForPanel(panelName, nextModel);
 
-      if (panelName === "sidebar") {
-        sidebarModel = nextModel;
-        if (persist) writeSidebarSettings();
-      } else if (panelName === "global-navigation") {
+      if (panelName === "global-navigation") {
         navigationModel = globalEditorModel;
         if (persist) writeSettings();
       } else if (panelName === "course-navigation") {
@@ -836,9 +811,7 @@ function buildSidebarModel() {
       }
 
       navigationObserver?.disconnect();
-      if (panelName === "sidebar") {
-        applySidebarLayout();
-      } else if (panelName === "global-navigation") {
+      if (panelName === "global-navigation") {
         applyNavigationLayout(document.querySelector(NAVIGATION_SELECTOR));
       } else if (panelName === "course-navigation") {
         applyCourseNavigation(requestedCourseId, courseEditorModel);
@@ -1105,7 +1078,25 @@ function buildSidebarModel() {
 
     renderEditorPanel("global-navigation", globalEditorModel);
     renderEditorPanel("course-navigation", courseEditorModel);
-    renderEditorPanel("sidebar", sidebarEditorModel);
+
+    todoVisibilityToggle.addEventListener("change", () => {
+      const todoItem = sidebarModel.find((item) => item.key === MCANVAS_TODO_KEY);
+      if (!todoItem) return;
+      todoItem.visibility = todoVisibilityToggle.checked ? "primary" : "overflow";
+      writeSidebarSettings();
+      navigationObserver?.disconnect();
+      applySidebarLayout();
+      navigationObserver?.observe(document.documentElement, { childList: true, subtree: true });
+      announce(`Assignment tracker ${todoVisibilityToggle.checked ? "shown" : "hidden"}.`);
+    });
+    todoVisibilityRow.addEventListener("click", (event) => {
+      if (!event.target.closest("input")) todoVisibilityToggle.click();
+    });
+    todoVisibilityRow.addEventListener("keydown", (event) => {
+      if (event.target.closest("input") || event.key !== "Enter") return;
+      event.preventDefault();
+      todoVisibilityToggle.click();
+    });
 
     courseSelect.addEventListener("change", async () => {
       const nextCourseId = courseSelect.value;
@@ -1138,14 +1129,10 @@ function buildSidebarModel() {
         const panelName = restoreButton.dataset.panel;
         const lists = listsForPanel(panelName);
         const model = modelForPanel(panelName);
-        const defaultOrderForPanel = panelName === "sidebar"
-          ? sidebarEditorDefaultOrder
-          : panelName === "course-navigation"
+        const defaultOrderForPanel = panelName === "course-navigation"
             ? courseEditorDefaultOrder
             : globalEditorDefaultOrder;
-        const defaultVisibilityForPanel = panelName === "sidebar"
-          ? sidebarEditorDefaultVisibility
-          : panelName === "course-navigation"
+        const defaultVisibilityForPanel = panelName === "course-navigation"
             ? courseEditorDefaultVisibility
             : globalEditorDefaultVisibility;
         const defaultPositions = new Map(defaultOrderForPanel.map((key, index) => [key, index]));
@@ -1163,10 +1150,7 @@ function buildSidebarModel() {
           row.querySelector("input").checked = visible;
           (visible ? lists.visible : lists.hidden).append(row);
         });
-        if (panelName === "sidebar") {
-          sidebarModel = model;
-          clearSidebarSettings();
-        } else if (panelName === "global-navigation") {
+        if (panelName === "global-navigation") {
           setGlobalOverflowExpanded(false);
         } else if (panelName === "course-navigation") {
           setCourseOverflowExpanded(requestedCourseId, false);
@@ -1174,7 +1158,7 @@ function buildSidebarModel() {
         }
         const persist = panelName === "global-navigation";
         applyRowOrder(
-          `${panelName === "sidebar" ? "Sidebar" : "Navigation"} defaults restored.`,
+          "Navigation defaults restored.",
           persist,
           panelName
         );
@@ -1236,7 +1220,7 @@ function buildSidebarModel() {
       if (event.key !== "Tab") return;
       const activePanel = backdrop.querySelector('[role="tabpanel"]:not([hidden])');
       const focusable = [
-        ...panelTabs,
+        ...panelTabs.filter((tab) => tab.getAttribute("aria-selected") === "true"),
         ...activePanel.querySelectorAll('.mcanvas-config-tab-row, select:not(:disabled), input:not(:disabled), button:not(:disabled)'),
       ].filter(Boolean);
       const first = focusable[0];
