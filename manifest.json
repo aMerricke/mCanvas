@@ -12,9 +12,13 @@
         "https://*.instructure.com/*"
       ],
       "css": [
+        "src/sidebar.css",
         "src/canvas.css"
       ],
       "js": [
+        "src/state.js",
+        "src/storage.js",
+        "src/canvas-api.js",
         "src/canvas.js"
       ],
       "run_at": "document_start"

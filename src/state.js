@@ -1,0 +1,35 @@
+"use strict";
+
+const NAVIGATION_SELECTOR = ".ic-app-header__main-navigation";
+const LIST_ITEM_SELECTOR = ".ic-app-header__menu-list-item";
+const COURSE_NAVIGATION_SELECTOR = "#section-tabs";
+const SIDEBAR_SELECTOR = "#right-side-wrapper";
+const COURSE_HIDDEN_CLASS = "mcanvas-course-navigation-hidden";
+const SIDEBAR_HIDDEN_CLASS = "mcanvas-sidebar-item-hidden";
+const MCANVAS_KEY = "mcanvas:configuration";
+const HIDDEN_CLASS = "mcanvas-overflow-hidden";
+const STORAGE_KEY = "globalNavigation";
+const COURSE_STORAGE_KEY = "courseNavigation";
+const SIDEBAR_STORAGE_KEY = "globalSidebar";
+const MCANVAS_TODO_KEY = "mcanvas:todo";
+const CANVAS_SIDEBAR_KEY = "canvas:sidebar";
+const GLOBAL_EXPANSION_KEY = "mcanvas:globalNavigationExpanded";
+const COURSE_EXPANSION_KEY_PREFIX = "mcanvas:courseNavigationExpanded:";
+
+const defaultOrder = [];
+const sidebarDefaultOrder = [MCANVAS_TODO_KEY, CANVAS_SIDEBAR_KEY];
+let navigationModel = [];
+let sidebarModel = [];
+let dialogEscapeHandler;
+let navigationObserver;
+let overflowExpanded = false;
+let refreshFrame;
+let savedSettings = { order: [], overflow: [] };
+let savedCourseSettings = {};
+let savedSidebarSettings = { order: [], hidden: [] };
+let configurationDialogOpening = false;
+let favoriteCourses = [];
+let availableCourses = [];
+let courseOverflowExpanded = false;
+let expandedCourseId;
+let activeConfigurationPanel = "navigation";

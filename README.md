@@ -28,7 +28,7 @@ and to track assignments centrally.
 * Make global navigation menu configurable [done]
 * Make course navigation menus configurable [done]
 * Make global sidebar configurable [done] (not as freely configurable as nav bars)
-* Add dark mode + general color configuration
+* Add dark mode + general color configuration [too hard right now]
 * Add assignment tracker
 
 ## Acknowledgement of AI Use
