@@ -77,6 +77,13 @@ function normalizedSidebarSettings(stored) {
     hidden: Array.isArray(stored?.hidden)
       ? stored.hidden.filter((key) => knownKeys.has(key))
       : [],
+    doneHistory: ["week", "month", "all"].includes(stored?.doneHistory)
+      ? stored.doneHistory
+      : "month",
+    todoLookahead: ["week", "month", "all"].includes(stored?.todoLookahead)
+      ? stored.todoLookahead
+      : "all",
+    showLockedAssignments: stored?.showLockedAssignments === true,
   };
 }
 
@@ -97,6 +104,9 @@ function writeSidebarSettings() {
   savedSidebarSettings = {
     order: sidebarModel.map((item) => item.key),
     hidden: sidebarModel.filter((item) => item.visibility === "overflow").map((item) => item.key),
+    doneHistory: savedSidebarSettings.doneHistory,
+    todoLookahead: savedSidebarSettings.todoLookahead,
+    showLockedAssignments: savedSidebarSettings.showLockedAssignments,
   };
   setSyncStorage(
     { [SIDEBAR_STORAGE_KEY]: savedSidebarSettings },
@@ -155,5 +165,54 @@ function clearCourseSettings(courseId) {
   setSyncStorage(
     { [COURSE_STORAGE_KEY]: savedCourseSettings },
     "mCanvas could not clear course navigation settings:"
+  );
+}
+
+function normalizedAssignmentCompletions(stored) {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+
+  return Object.fromEntries(
+    Object.entries(stored).flatMap(([host, assignments]) => {
+      if (!assignments || typeof assignments !== "object" || Array.isArray(assignments)) return [];
+      const normalizedAssignments = Object.fromEntries(
+        Object.entries(assignments).flatMap(([key, value]) => {
+          if (typeof value === "boolean") {
+            return [[key, { completed: value, completedAt: null }]];
+          }
+          if (!value || typeof value !== "object" || typeof value.completed !== "boolean") {
+            return [];
+          }
+          const completedAt = typeof value.completedAt === "string" &&
+            Number.isFinite(new Date(value.completedAt).getTime())
+            ? value.completedAt
+            : null;
+          return [[key, { completed: value.completed, completedAt }]];
+        })
+      );
+      return [[host, normalizedAssignments]];
+    })
+  );
+}
+
+function readAssignmentCompletions() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(ASSIGNMENT_COMPLETION_STORAGE_KEY, (result) => {
+      if (chrome.runtime.lastError) {
+        console.warn(
+          "mCanvas could not read assignment completion settings:",
+          chrome.runtime.lastError.message
+        );
+        resolve({});
+        return;
+      }
+      resolve(normalizedAssignmentCompletions(result[ASSIGNMENT_COMPLETION_STORAGE_KEY]));
+    });
+  });
+}
+
+function writeAssignmentCompletions() {
+  setSyncStorage(
+    { [ASSIGNMENT_COMPLETION_STORAGE_KEY]: savedAssignmentCompletions },
+    "mCanvas could not save assignment completion settings:"
   );
 }

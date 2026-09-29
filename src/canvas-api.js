@@ -46,16 +46,20 @@ async function fetchActiveCourses() {
   }));
 }
 
-function isUnsubmittedActiveAssignment(assignment, now = new Date()) {
+function isPublishedNonExcusedAssignment(assignment) {
+  return assignment.published !== false && assignment.submission?.excused !== true;
+}
+
+function isAssignmentLocked(assignment, now = new Date()) {
   const unlockAt = assignment.unlock_at && new Date(assignment.unlock_at);
   const lockAt = assignment.lock_at && new Date(assignment.lock_at);
-  const submission = assignment.submission;
+  return assignment.locked_for_user === true ||
+    Boolean((unlockAt && unlockAt > now) || (lockAt && lockAt <= now));
+}
 
-  return assignment.published !== false &&
-    (!unlockAt || unlockAt <= now) &&
-    (!lockAt || lockAt > now) &&
-    submission?.excused !== true &&
-    (!submission || submission.workflow_state === "unsubmitted");
+function isCanvasAssignmentComplete(assignment) {
+  const workflowState = assignment.submission?.workflow_state;
+  return Boolean(workflowState && workflowState !== "unsubmitted");
 }
 
 async function fetchAssignmentTrackerCourses() {
@@ -71,7 +75,7 @@ async function fetchAssignmentTrackerCourses() {
   return activeCourses.filter((course) => favoriteIds.has(course.id));
 }
 
-async function fetchUnsubmittedActiveAssignments() {
+async function fetchAssignmentTrackerAssignments() {
   const courses = await fetchAssignmentTrackerCourses();
   const assignmentsByCourse = await Promise.all(courses.map(async (course) => {
     const assignments = await fetchCanvasCollection(
@@ -79,7 +83,7 @@ async function fetchUnsubmittedActiveAssignments() {
       "?per_page=100&include[]=submission&order_by=due_at&override_assignment_dates=true"
     );
     return assignments
-      .filter((assignment) => isUnsubmittedActiveAssignment(assignment))
+      .filter(isPublishedNonExcusedAssignment)
       .map((assignment) => ({ ...assignment, course }));
   }));
 

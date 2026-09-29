@@ -28,34 +28,221 @@ body.with-right-side.mcanvas-sidebar-empty #content-wrapper {
   border-radius: 6px;
   box-sizing: border-box;
   margin-bottom: 16px;
-  padding: 16px;
+  padding: 14px;
+}
+
+.mcanvas-todo-header {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
 }
 
 .mcanvas-todo-heading {
   color: var(--ic-brand-font-color-dark, #2d3b45);
+  flex: 1 1 auto;
   font-size: 1.125rem;
   line-height: 1.25;
-  margin: 0 0 12px;
+  margin: 0;
+}
+
+.mcanvas-todo-progress-text {
+  color: var(--ic-brand-font-color-dark-lightened-15, #5c6670);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mcanvas-todo-progress {
+  accent-color: #2f8f5b;
+  display: block;
+  height: 6px;
+  margin: 9px 0 12px;
+  width: 100%;
+}
+
+.mcanvas-todo-feedback {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.mcanvas-todo-board {
+  min-width: 0;
+}
+
+.mcanvas-todo-settings {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ic-link-color, #0374b5);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 1rem;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  margin: 0;
+  padding: 0;
+  width: 24px;
+}
+
+.mcanvas-todo-settings:hover {
+  background: rgb(3 116 181 / 8%);
+}
+
+.mcanvas-todo-settings:focus-visible {
+  outline: 2px solid var(--ic-link-color, #0374b5);
+  outline-offset: 2px;
+}
+
+.mcanvas-todo-settings svg {
+  display: block;
+  height: 18px;
+  width: 18px;
+}
+
+.mcanvas-todo-tabs {
+  border-bottom: 1px solid var(--ic-border-light, #c7cdd1);
+  display: flex;
+  gap: 4px;
+}
+
+.mcanvas-todo-tab {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ic-brand-font-color-dark, #2d3b45);
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  gap: 5px;
+  justify-content: center;
+  line-height: 1.2;
+  margin-bottom: -1px;
+  padding: 7px 4px;
+}
+
+.mcanvas-todo-tab:hover {
+  background: rgb(45 59 69 / 5%);
+}
+
+.mcanvas-todo-tab[aria-selected="true"] {
+  border-bottom-color: var(--ic-link-color, #0374b5);
+  color: var(--ic-link-color, #0374b5);
+}
+
+.mcanvas-todo-tab:focus-visible {
+  outline: 2px solid var(--ic-link-color, #0374b5);
+  outline-offset: 2px;
+}
+
+.mcanvas-todo-tab-panel {
+  padding-top: 8px;
+}
+
+.mcanvas-todo-tab-panel[hidden] {
+  display: none !important;
+}
+
+.mcanvas-todo-count {
+  align-items: center;
+  background: rgb(45 59 69 / 10%);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.625rem;
+  justify-content: center;
+  min-height: 18px;
+  min-width: 18px;
+  padding-inline: 4px;
 }
 
 .mcanvas-todo-list {
   list-style: none;
   margin: 0;
+  max-height: min(50vh, 500px);
+  overflow-y: auto;
   padding: 0;
+  scrollbar-gutter: stable;
 }
 
 .mcanvas-todo-assignment {
-  border-top: 1px solid var(--ic-border-light, #c7cdd1);
-  padding: 10px 0;
+  align-items: start;
+  background: var(--ic-brand-primary-lightened-95, #fff);
+  border: 1px solid var(--ic-border-light, #c7cdd1);
+  border-radius: 5px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 8px;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 
-.mcanvas-todo-assignment:first-child {
-  border-top: 0;
-  padding-top: 0;
+.mcanvas-todo-assignment + .mcanvas-todo-assignment {
+  margin-top: 6px;
 }
 
-.mcanvas-todo-assignment:last-child {
-  padding-bottom: 0;
+.mcanvas-todo-assignment-complete {
+  background: rgb(47 143 91 / 6%);
+  border-color: rgb(47 143 91 / 30%);
+}
+
+.mcanvas-todo-assignment-celebrate {
+  animation: mcanvas-assignment-complete 650ms ease-out;
+}
+
+@keyframes mcanvas-assignment-complete {
+  35% {
+    background: rgb(47 143 91 / 22%);
+    transform: translateY(-2px);
+  }
+}
+
+.mcanvas-todo-toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--ic-border-dark, #8b969e);
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  width: 20px;
+}
+
+.mcanvas-todo-toggle[aria-pressed="true"] {
+  background: #2f8f5b;
+  border-color: #2f8f5b;
+}
+
+.mcanvas-todo-toggle[aria-pressed="true"]::before {
+  content: "✓";
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mcanvas-todo-toggle:focus-visible {
+  outline: 2px solid var(--ic-link-color, #0374b5);
+  outline-offset: 2px;
+}
+
+.mcanvas-todo-content {
+  min-width: 0;
 }
 
 .mcanvas-todo-title,
@@ -66,6 +253,12 @@ body.with-right-side.mcanvas-sidebar-empty #content-wrapper {
 .mcanvas-todo-title {
   font-weight: 600;
   line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.mcanvas-todo-assignment-complete .mcanvas-todo-title {
+  opacity: 0.72;
+  text-decoration: line-through;
 }
 
 .mcanvas-todo-details,
@@ -77,8 +270,28 @@ body.with-right-side.mcanvas-sidebar-empty #content-wrapper {
 
 .mcanvas-todo-details {
   margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 
 .mcanvas-todo-status {
   margin: 0;
+}
+
+.mcanvas-todo-empty {
+  border: 1px dashed var(--ic-border-light, #c7cdd1);
+  border-radius: 5px;
+  color: var(--ic-brand-font-color-dark-lightened-15, #5c6670);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  padding: 9px 7px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mcanvas-todo-assignment {
+    transition: none;
+  }
+
+  .mcanvas-todo-assignment-celebrate {
+    animation: none;
+  }
 }

@@ -208,7 +208,8 @@
   margin-top: 20px;
 }
 
-.mcanvas-config-restore-button {
+.mcanvas-config-restore-button,
+.mcanvas-config-todo-restore-button {
   background: transparent;
   border: 1px solid #8996a3;
   border-radius: 4px;
@@ -220,7 +221,8 @@
   padding: 5px 8px;
 }
 
-.mcanvas-config-restore-button:hover {
+.mcanvas-config-restore-button:hover,
+.mcanvas-config-todo-restore-button:hover {
   background: rgb(255 255 255 / 6%);
   border-color: #d8e1e8;
 }
@@ -300,6 +302,15 @@
   background: rgb(255 255 255 / 6%);
 }
 
+.mcanvas-config-todo-setting {
+  margin-bottom: 0;
+  margin-top: 16px;
+}
+
+.mcanvas-config-todo-setting + .mcanvas-config-todo-setting {
+  margin-top: 10px;
+}
+
 .mcanvas-config-static-row {
   cursor: pointer;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -364,6 +375,7 @@
 .mcanvas-config-context-field select:focus-visible,
 .mcanvas-config-panel-tabs [role="tab"]:focus-visible,
 .mcanvas-config-restore-button:focus-visible,
+.mcanvas-config-todo-restore-button:focus-visible,
 .mcanvas-config-tab-row:focus-visible,
 .mcanvas-config-tab-row input:focus-visible {
   outline: 2px solid #fff;

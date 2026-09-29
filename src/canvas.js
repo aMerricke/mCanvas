@@ -251,13 +251,238 @@ function buildSidebarModel() {
     }).format(new Date(dueAt))}`;
   }
 
+  function assignmentStorageKey(assignment) {
+    return `${assignment.course.id}:${assignment.id}`;
+  }
+
+  function compareAssignmentsByReverseDueDate(first, second) {
+    if (!first.due_at) return second.due_at ? 1 : first.name.localeCompare(second.name);
+    if (!second.due_at) return -1;
+    return new Date(second.due_at) - new Date(first.due_at);
+  }
+
+  function assignmentIsComplete(assignment) {
+    const stored = savedAssignmentCompletions[window.location.host]?.[assignmentStorageKey(assignment)];
+    return typeof stored?.completed === "boolean"
+      ? stored.completed
+      : isCanvasAssignmentComplete(assignment);
+  }
+
+  function assignmentCompletedAt(assignment) {
+    const stored = savedAssignmentCompletions[window.location.host]?.[assignmentStorageKey(assignment)];
+    if (stored?.completed && stored.completedAt) return new Date(stored.completedAt);
+    if (!isCanvasAssignmentComplete(assignment)) return undefined;
+    const canvasCompletedAt = assignment.submission?.submitted_at || assignment.submission?.graded_at;
+    return canvasCompletedAt ? new Date(canvasCompletedAt) : undefined;
+  }
+
+  function assignmentIsInDoneHistory(assignment, now = new Date()) {
+    const history = savedSidebarSettings.doneHistory;
+    if (history === "all") return true;
+
+    const completedAt = assignmentCompletedAt(assignment);
+    if (!completedAt || !Number.isFinite(completedAt.getTime())) return false;
+    const historyDays = history === "month" ? 30 : 7;
+    return completedAt >= new Date(now.getTime() - historyDays * 24 * 60 * 60 * 1000);
+  }
+
+  function assignmentIsInTodoLookahead(assignment, now = new Date()) {
+    const lookahead = savedSidebarSettings.todoLookahead;
+    if (lookahead === "all" || !assignment.due_at) return true;
+
+    const dueAt = new Date(assignment.due_at);
+    if (!Number.isFinite(dueAt.getTime())) return true;
+    const lookaheadDays = lookahead === "month" ? 30 : 7;
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() + lookaheadDays);
+    cutoff.setHours(23, 59, 59, 999);
+    return dueAt <= cutoff;
+  }
+
+  function assignmentIsVisibleForLockSetting(assignment) {
+    return savedSidebarSettings.showLockedAssignments || !isAssignmentLocked(assignment);
+  }
+
+  function setAssignmentCompletion(assignment, completed) {
+    const host = window.location.host;
+    const key = assignmentStorageKey(assignment);
+    const hostCompletions = { ...savedAssignmentCompletions[host] };
+
+    if (completed === isCanvasAssignmentComplete(assignment)) delete hostCompletions[key];
+    else {
+      hostCompletions[key] = {
+        completed,
+        completedAt: completed ? new Date().toISOString() : null,
+      };
+    }
+
+    savedAssignmentCompletions = {
+      ...savedAssignmentCompletions,
+      [host]: hostCompletions,
+    };
+    writeAssignmentCompletions();
+  }
+
+  function createAssignmentItem(assignment, completed, section) {
+    const item = document.createElement("li");
+    item.className = "mcanvas-todo-assignment";
+    item.classList.toggle("mcanvas-todo-assignment-complete", completed);
+
+    const toggle = document.createElement("button");
+    toggle.className = "mcanvas-todo-toggle";
+    toggle.type = "button";
+    toggle.dataset.assignmentKey = assignmentStorageKey(assignment);
+    toggle.setAttribute("aria-pressed", String(completed));
+    toggle.setAttribute(
+      "aria-label",
+      `${completed ? "Mark incomplete" : "Mark complete"}: ${assignment.name}`
+    );
+    toggle.title = completed ? "Move back to To do" : "Mark complete";
+
+    const content = document.createElement("div");
+    content.className = "mcanvas-todo-content";
+
+    const title = document.createElement("a");
+    title.className = "mcanvas-todo-title";
+    title.href = assignment.html_url;
+    title.textContent = assignment.name;
+
+    const details = document.createElement("span");
+    details.className = "mcanvas-todo-details";
+    details.textContent = `${assignment.course.name} · ${formatAssignmentDueDate(assignment.due_at)}`;
+
+    toggle.addEventListener("click", () => {
+      const nextCompleted = !completed;
+      setAssignmentCompletion(assignment, nextCompleted);
+      const remaining = todoAssignments.filter((itemAssignment) =>
+        !assignmentIsComplete(itemAssignment) &&
+        assignmentIsVisibleForLockSetting(itemAssignment) &&
+        assignmentIsInTodoLookahead(itemAssignment)
+      ).length;
+      assignmentFeedback = nextCompleted
+        ? `${assignment.name} completed. ${remaining ? `${remaining} left.` : "Everything is done!"}`
+        : `${assignment.name} moved back to To do.`;
+      renderTodoAssignments(section);
+
+      const activePanel = section.querySelector('.mcanvas-todo-tab-panel:not([hidden])');
+      const movedAssignmentToggle = activePanel?.querySelector(
+        `.mcanvas-todo-toggle[data-assignment-key="${CSS.escape(assignmentStorageKey(assignment))}"]`
+      );
+      const focusToggle = movedAssignmentToggle || activePanel?.querySelector(".mcanvas-todo-toggle");
+      if (focusToggle) focusToggle.focus();
+      else section.querySelector('.mcanvas-todo-tab[aria-selected="true"]')?.focus();
+      if (nextCompleted) {
+        const movedItem = movedAssignmentToggle?.closest(".mcanvas-todo-assignment");
+        movedItem?.classList.add("mcanvas-todo-assignment-celebrate");
+        window.setTimeout(
+          () => movedItem?.classList.remove("mcanvas-todo-assignment-celebrate"),
+          650
+        );
+      }
+    });
+
+    content.append(title, details);
+    item.append(toggle, content);
+    return item;
+  }
+
+  function activateAssignmentTab(board, tabName, focus = false) {
+    activeAssignmentTab = tabName;
+    for (const tab of board.querySelectorAll('[role="tab"]')) {
+      const selected = tab.dataset.assignmentTab === tabName;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected && focus) tab.focus();
+    }
+    for (const panel of board.querySelectorAll('[role="tabpanel"]')) {
+      panel.hidden = panel.dataset.assignmentPanel !== tabName;
+    }
+  }
+
+  function createAssignmentTab(label, count, tabName, board) {
+    const tab = document.createElement("button");
+    tab.className = "mcanvas-todo-tab";
+    tab.id = `mcanvas-assignment-tab-${tabName}`;
+    tab.type = "button";
+    tab.setAttribute("role", "tab");
+    tab.dataset.assignmentTab = tabName;
+    tab.setAttribute("aria-controls", `mcanvas-assignment-panel-${tabName}`);
+    tab.setAttribute("aria-label", `${label}, ${count} assignments`);
+    tab.append(document.createTextNode(label));
+
+    const badge = document.createElement("span");
+    badge.className = "mcanvas-todo-count";
+    badge.textContent = String(count);
+    tab.append(badge);
+
+    tab.addEventListener("click", () => activateAssignmentTab(board, tabName));
+    tab.addEventListener("keydown", (event) => {
+      const tabNames = ["todo", "done"];
+      const currentIndex = tabNames.indexOf(tabName);
+      let nextIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabNames.length) % tabNames.length;
+      else if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabNames.length;
+      else if (event.key === "Home") nextIndex = 0;
+      else if (event.key === "End") nextIndex = tabNames.length - 1;
+      else return;
+      event.preventDefault();
+      activateAssignmentTab(board, tabNames[nextIndex], true);
+    });
+    return tab;
+  }
+
+  function createAssignmentTabPanel(assignments, completed, tabName, section) {
+    const panel = document.createElement("section");
+    panel.className = "mcanvas-todo-tab-panel";
+    panel.id = `mcanvas-assignment-panel-${tabName}`;
+    panel.setAttribute("role", "tabpanel");
+    panel.dataset.assignmentPanel = tabName;
+    panel.setAttribute("aria-labelledby", `mcanvas-assignment-tab-${tabName}`);
+
+    const list = document.createElement("ul");
+    list.className = "mcanvas-todo-list";
+    list.id = `mcanvas-assignment-list-${tabName}`;
+    list.setAttribute("aria-label", `${tabName === "todo" ? "To do" : "Done"} assignments`);
+    for (const assignment of assignments) {
+      list.append(createAssignmentItem(assignment, completed, section));
+    }
+
+    if (assignments.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "mcanvas-todo-empty";
+      empty.textContent = completed ? "Better get moving then." : "Nice.";
+      list.append(empty);
+    }
+
+    panel.append(list);
+    return panel;
+  }
+
   function renderTodoAssignments(section) {
     section.replaceChildren();
+
+    const header = document.createElement("div");
+    header.className = "mcanvas-todo-header";
 
     const heading = document.createElement("h2");
     heading.className = "mcanvas-todo-heading";
     heading.textContent = "Assignments";
-    section.append(heading);
+
+    const settingsButton = document.createElement("button");
+    settingsButton.className = "mcanvas-todo-settings";
+    settingsButton.type = "button";
+    settingsButton.setAttribute("aria-label", "Configure To-do list");
+    settingsButton.title = "Configure To-do list";
+    settingsButton.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.09a2 2 0 0 1 1 1.74v.5a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg>`;
+    settingsButton.addEventListener("click", () => openConfigurationDialog("todo"));
+
+    header.append(heading, settingsButton);
+    section.append(header);
 
     if (todoAssignmentsState !== "ready") {
       const status = document.createElement("p");
@@ -269,33 +494,61 @@ function buildSidebarModel() {
       return;
     }
 
-    if (todoAssignments.length === 0) {
+    const incomplete = todoAssignments.filter((assignment) =>
+      !assignmentIsComplete(assignment) &&
+      assignmentIsVisibleForLockSetting(assignment) &&
+      assignmentIsInTodoLookahead(assignment)
+    );
+    const allComplete = todoAssignments.filter((assignment) =>
+      assignmentIsComplete(assignment) && assignmentIsVisibleForLockSetting(assignment)
+    );
+    const complete = allComplete
+      .filter((assignment) => assignmentIsInDoneHistory(assignment))
+      .sort(compareAssignmentsByReverseDueDate);
+    const visibleTotal = incomplete.length + complete.length;
+    if (visibleTotal === 0) {
       const empty = document.createElement("p");
       empty.className = "mcanvas-todo-status";
-      empty.textContent = "No unsubmitted assignments.";
+      empty.textContent = "No active assignments.";
       section.append(empty);
       return;
     }
+    const progressText = document.createElement("span");
+    progressText.className = "mcanvas-todo-progress-text";
+    progressText.textContent = `${complete.length}/${visibleTotal} done`;
+    header.insertBefore(progressText, settingsButton);
 
-    const list = document.createElement("ul");
-    list.className = "mcanvas-todo-list";
-    for (const assignment of todoAssignments) {
-      const item = document.createElement("li");
-      item.className = "mcanvas-todo-assignment";
+    const progress = document.createElement("progress");
+    progress.className = "mcanvas-todo-progress";
+    progress.max = visibleTotal;
+    progress.value = complete.length;
+    progress.setAttribute(
+      "aria-label",
+      `${complete.length} of ${visibleTotal} assignments complete`
+    );
 
-      const title = document.createElement("a");
-      title.className = "mcanvas-todo-title";
-      title.href = assignment.html_url;
-      title.textContent = assignment.name;
+    const feedback = document.createElement("p");
+    feedback.className = "mcanvas-todo-feedback";
+    feedback.setAttribute("aria-live", "polite");
+    feedback.textContent = assignmentFeedback;
 
-      const details = document.createElement("span");
-      details.className = "mcanvas-todo-details";
-      details.textContent = `${assignment.course.name} · ${formatAssignmentDueDate(assignment.due_at)}`;
-
-      item.append(title, details);
-      list.append(item);
-    }
-    section.append(list);
+    const board = document.createElement("div");
+    board.className = "mcanvas-todo-board";
+    const tabList = document.createElement("div");
+    tabList.className = "mcanvas-todo-tabs";
+    tabList.setAttribute("role", "tablist");
+    tabList.setAttribute("aria-label", "Assignment status");
+    tabList.append(
+      createAssignmentTab("To do", incomplete.length, "todo", board),
+      createAssignmentTab("Done", complete.length, "done", board)
+    );
+    board.append(
+      tabList,
+      createAssignmentTabPanel(incomplete, false, "todo", section),
+      createAssignmentTabPanel(complete, true, "done", section)
+    );
+    activateAssignmentTab(board, activeAssignmentTab);
+    section.append(progress, feedback, board);
   }
 
   function ensureTodoPlaceholder(container) {
@@ -307,7 +560,7 @@ function buildSidebarModel() {
     const placeholder = document.createElement("section");
     placeholder.className = "mcanvas-todo-placeholder";
     placeholder.dataset.mcanvasOwned = "true";
-    placeholder.setAttribute("aria-label", "Unsubmitted assignments");
+    placeholder.setAttribute("aria-label", "Assignment tracker");
     renderTodoAssignments(placeholder);
     container.append(placeholder);
     return placeholder;
@@ -315,7 +568,7 @@ function buildSidebarModel() {
 
   async function loadTodoAssignments() {
     try {
-      todoAssignments = await fetchUnsubmittedActiveAssignments();
+      todoAssignments = await fetchAssignmentTrackerAssignments();
       todoAssignmentsState = "ready";
     } catch (error) {
       todoAssignmentsState = "error";
@@ -521,12 +774,18 @@ function buildSidebarModel() {
       document.removeEventListener("keydown", dialogEscapeHandler, true);
       dialogEscapeHandler = undefined;
     }
+    const returnFocusElement = backdrop.mcanvasReturnFocusElement;
     backdrop.remove();
-    document.querySelector(".mcanvas-navigation-button")?.focus();
+    if (returnFocusElement?.isConnected) returnFocusElement.focus();
+    else {
+      (document.querySelector(".mcanvas-todo-settings") ||
+        document.querySelector(".mcanvas-navigation-button"))?.focus();
+    }
   }
 
   async function openConfigurationDialog(requestedPanel, requestedCourseId) {
     if (document.querySelector(".mcanvas-config-backdrop") || configurationDialogOpening) return;
+    const returnFocusElement = document.activeElement;
     configurationDialogOpening = true;
 
     try {
@@ -569,6 +828,7 @@ function buildSidebarModel() {
     if (document.querySelector(".mcanvas-config-backdrop")) return;
 
     const backdrop = document.createElement("div");
+    backdrop.mcanvasReturnFocusElement = returnFocusElement;
     backdrop.className = "mcanvas-config-backdrop";
     backdrop.innerHTML = `
       <section class="mcanvas-config-dialog" role="dialog" aria-modal="true" aria-labelledby="mcanvas-config-title" tabindex="-1">
@@ -615,14 +875,42 @@ function buildSidebarModel() {
         </div>
         <div id="mcanvas-todo-panel" role="tabpanel" aria-labelledby="mcanvas-todo-tab" data-panel="todo" hidden>
           <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-todo-visibility-heading">
-            <h3 class="mcanvas-config-group-heading" id="mcanvas-todo-visibility-heading">Visibility</h3>
+            <h3 class="mcanvas-config-group-heading" id="mcanvas-todo-visibility-heading">Widget visibility</h3>
             <ul class="mcanvas-config-tab-list">
               <li class="mcanvas-config-tab-row mcanvas-config-static-row" tabindex="0">
-                <span class="mcanvas-config-tab-name">Show assignment tracker</span>
-                <input id="mcanvas-todo-visible" type="checkbox" role="switch" aria-label="Show assignment tracker">
+                <span class="mcanvas-config-tab-name">Show/Hide</span>
+                <input id="mcanvas-todo-visible" type="checkbox" role="switch" aria-label="Show/Hide">
               </li>
             </ul>
           </section>
+          <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-todo-locked-heading">
+            <h3 class="mcanvas-config-group-heading" id="mcanvas-todo-locked-heading">Locked assignments</h3>
+            <ul class="mcanvas-config-tab-list">
+              <li class="mcanvas-config-tab-row mcanvas-config-static-row" tabindex="0">
+                <span class="mcanvas-config-tab-name">Show locked assignments</span>
+                <input id="mcanvas-show-locked" type="checkbox" role="switch" aria-label="Show locked assignments">
+              </li>
+            </ul>
+          </section>
+          <div class="mcanvas-config-context-field mcanvas-config-todo-setting">
+            <label for="mcanvas-done-history">Done history</label>
+            <select id="mcanvas-done-history">
+              <option value="week">Past week</option>
+              <option value="month">Past month</option>
+              <option value="all">All time</option>
+            </select>
+          </div>
+          <div class="mcanvas-config-context-field mcanvas-config-todo-setting">
+            <label for="mcanvas-todo-lookahead">To-do lookahead</label>
+            <select id="mcanvas-todo-lookahead">
+              <option value="week">Next week</option>
+              <option value="month">Next month</option>
+              <option value="all">All posted</option>
+            </select>
+          </div>
+          <footer class="mcanvas-config-footer">
+            <button class="mcanvas-config-todo-restore-button" type="button">Restore Defaults</button>
+          </footer>
         </div>
       </section>`;
 
@@ -632,6 +920,11 @@ function buildSidebarModel() {
     const restoreButtons = [...backdrop.querySelectorAll(".mcanvas-config-restore-button")];
     const todoVisibilityToggle = backdrop.querySelector("#mcanvas-todo-visible");
     const todoVisibilityRow = todoVisibilityToggle.closest(".mcanvas-config-static-row");
+    const showLockedToggle = backdrop.querySelector("#mcanvas-show-locked");
+    const showLockedRow = showLockedToggle.closest(".mcanvas-config-static-row");
+    const todoLookaheadSelect = backdrop.querySelector("#mcanvas-todo-lookahead");
+    const doneHistorySelect = backdrop.querySelector("#mcanvas-done-history");
+    const todoRestoreDefaultsButton = backdrop.querySelector(".mcanvas-config-todo-restore-button");
     const announcer = backdrop.querySelector(".mcanvas-sr-only");
     let dragSession;
     let suppressClick = false;
@@ -695,6 +988,9 @@ function buildSidebarModel() {
     todoVisibilityToggle.checked = sidebarModel.find(
       (item) => item.key === MCANVAS_TODO_KEY
     )?.visibility !== "overflow";
+    showLockedToggle.checked = savedSidebarSettings.showLockedAssignments;
+    todoLookaheadSelect.value = savedSidebarSettings.todoLookahead;
+    doneHistorySelect.value = savedSidebarSettings.doneHistory;
 
     const panelTabs = [...backdrop.querySelectorAll('.mcanvas-config-panel-tabs [role="tab"]')];
 
@@ -1087,7 +1383,7 @@ function buildSidebarModel() {
       navigationObserver?.disconnect();
       applySidebarLayout();
       navigationObserver?.observe(document.documentElement, { childList: true, subtree: true });
-      announce(`Assignment tracker ${todoVisibilityToggle.checked ? "shown" : "hidden"}.`);
+      announce(`To-do list ${todoVisibilityToggle.checked ? "shown" : "hidden"}.`);
     });
     todoVisibilityRow.addEventListener("click", (event) => {
       if (!event.target.closest("input")) todoVisibilityToggle.click();
@@ -1096,6 +1392,68 @@ function buildSidebarModel() {
       if (event.target.closest("input") || event.key !== "Enter") return;
       event.preventDefault();
       todoVisibilityToggle.click();
+    });
+    showLockedToggle.addEventListener("change", () => {
+      savedSidebarSettings = {
+        ...savedSidebarSettings,
+        showLockedAssignments: showLockedToggle.checked,
+      };
+      writeSidebarSettings();
+      const section = document.querySelector(`${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`);
+      if (section) renderTodoAssignments(section);
+      announce(`Locked assignments ${showLockedToggle.checked ? "shown" : "hidden"}.`);
+    });
+    showLockedRow.addEventListener("click", (event) => {
+      if (!event.target.closest("input")) showLockedToggle.click();
+    });
+    showLockedRow.addEventListener("keydown", (event) => {
+      if (event.target.closest("input") || event.key !== "Enter") return;
+      event.preventDefault();
+      showLockedToggle.click();
+    });
+    todoLookaheadSelect.addEventListener("change", () => {
+      savedSidebarSettings = {
+        ...savedSidebarSettings,
+        todoLookahead: todoLookaheadSelect.value,
+      };
+      writeSidebarSettings();
+      const section = document.querySelector(`${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`);
+      if (section) renderTodoAssignments(section);
+      const selectedLabel = todoLookaheadSelect.selectedOptions[0]?.textContent || "All posted";
+      announce(`To-do lookahead set to ${selectedLabel}.`);
+    });
+    doneHistorySelect.addEventListener("change", () => {
+      savedSidebarSettings = {
+        ...savedSidebarSettings,
+        doneHistory: doneHistorySelect.value,
+      };
+      writeSidebarSettings();
+      const section = document.querySelector(`${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`);
+      if (section) renderTodoAssignments(section);
+      const selectedLabel = doneHistorySelect.selectedOptions[0]?.textContent || "Past month";
+      announce(`Done history set to ${selectedLabel}.`);
+    });
+    todoRestoreDefaultsButton.addEventListener("click", () => {
+      const todoItem = sidebarModel.find((item) => item.key === MCANVAS_TODO_KEY);
+      if (todoItem) todoItem.visibility = "primary";
+      savedSidebarSettings = {
+        ...savedSidebarSettings,
+        doneHistory: "month",
+        todoLookahead: "all",
+        showLockedAssignments: false,
+      };
+      todoVisibilityToggle.checked = true;
+      showLockedToggle.checked = false;
+      doneHistorySelect.value = "month";
+      todoLookaheadSelect.value = "all";
+      writeSidebarSettings();
+      navigationObserver?.disconnect();
+      applySidebarLayout();
+      navigationObserver?.observe(document.documentElement, { childList: true, subtree: true });
+      const section = document.querySelector(`${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`);
+      if (section) renderTodoAssignments(section);
+      announce("To-do list defaults restored.");
+      todoRestoreDefaultsButton.focus();
     });
 
     courseSelect.addEventListener("change", async () => {
@@ -1239,10 +1597,11 @@ function buildSidebarModel() {
   }
 
   async function initialize() {
-    [savedSettings, savedCourseSettings, savedSidebarSettings] = await Promise.all([
+    [savedSettings, savedCourseSettings, savedSidebarSettings, savedAssignmentCompletions] = await Promise.all([
       readSettings(),
       readCourseSettings(),
       readSidebarSettings(),
+      readAssignmentCompletions(),
     ]);
     buildSidebarModel();
     navigationObserver = new MutationObserver(scheduleRefresh);
@@ -1280,6 +1639,22 @@ function buildSidebarModel() {
           savedSidebarSettings = nextSettings;
           buildSidebarModel();
           refreshNavigation();
+          const section = document.querySelector(
+            `${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`
+          );
+          if (section) renderTodoAssignments(section);
+        }
+      }
+      if (changes[ASSIGNMENT_COMPLETION_STORAGE_KEY]) {
+        const nextCompletions = normalizedAssignmentCompletions(
+          changes[ASSIGNMENT_COMPLETION_STORAGE_KEY].newValue
+        );
+        if (JSON.stringify(nextCompletions) !== JSON.stringify(savedAssignmentCompletions)) {
+          savedAssignmentCompletions = nextCompletions;
+          const section = document.querySelector(
+            `${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`
+          );
+          if (section) renderTodoAssignments(section);
         }
       }
     });

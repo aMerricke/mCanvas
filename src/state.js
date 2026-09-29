@@ -12,6 +12,7 @@ const STORAGE_KEY = "globalNavigation";
 const COURSE_STORAGE_KEY = "courseNavigation";
 const SIDEBAR_STORAGE_KEY = "globalSidebar";
 const MCANVAS_TODO_KEY = "mcanvas:todo";
+const ASSIGNMENT_COMPLETION_STORAGE_KEY = "assignmentCompletions";
 const GLOBAL_EXPANSION_KEY = "mcanvas:globalNavigationExpanded";
 const COURSE_EXPANSION_KEY_PREFIX = "mcanvas:courseNavigationExpanded:";
 
@@ -25,7 +26,13 @@ let overflowExpanded = false;
 let refreshFrame;
 let savedSettings = { order: [], overflow: [] };
 let savedCourseSettings = {};
-let savedSidebarSettings = { order: [], hidden: [] };
+let savedSidebarSettings = {
+  order: [],
+  hidden: [],
+  doneHistory: "month",
+  todoLookahead: "all",
+  showLockedAssignments: false,
+};
 let configurationDialogOpening = false;
 let favoriteCourses = [];
 let availableCourses = [];
@@ -34,3 +41,6 @@ let expandedCourseId;
 let activeConfigurationPanel = "navigation";
 let todoAssignments = [];
 let todoAssignmentsState = "loading";
+let savedAssignmentCompletions = {};
+let assignmentFeedback = "";
+let activeAssignmentTab = "todo";
