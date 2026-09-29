@@ -1,25 +1,32 @@
-/* Dashboard */
+/* Global sidebar configuration */
 
-/* Hide the dashboard's secondary right-hand panel without affecting other pages. */
-#application:has(#dashboard) #right-side-wrapper {
+.mcanvas-sidebar-item-hidden,
+body.mcanvas-sidebar-empty #right-side-wrapper {
   display: none !important;
 }
 
-/* Canvas reserves this margin when the body has its `with-right-side` class. */
-body.with-right-side:has(#dashboard) #content-wrapper {
-  margin-right: 0 !important;
-}
-
-/* Course home */
-
-/* Hide the secondary panel on course home pages only. */
-#application:has(#course_home_content) #right-side-wrapper {
+#right-side-wrapper.mcanvas-native-sidebar-hidden > :not(.mcanvas-todo-placeholder) {
   display: none !important;
 }
 
-/* Let the course home content use the space reserved for the secondary panel. */
-body.with-right-side:has(#course_home_content) #content-wrapper {
+body.with-right-side.mcanvas-sidebar-empty #content-wrapper {
   margin-right: 0 !important;
+}
+
+.mcanvas-todo-placeholder {
+  align-items: center;
+  background: rgb(3 116 181 / 8%);
+  border: 2px dashed var(--ic-link-color, #0374b5);
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: var(--ic-link-color, #0374b5);
+  display: flex;
+  font-weight: 600;
+  justify-content: center;
+  margin-bottom: 16px;
+  min-height: 160px;
+  padding: 24px;
+  text-align: center;
 }
 
 /* mCanvas global-navigation configuration */
@@ -204,18 +211,23 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
 .mcanvas-config-panel-tabs {
   border-bottom: 1px solid #3c4a57;
   display: flex;
+  gap: 16px;
   margin-bottom: 12px;
 }
 
 .mcanvas-config-panel-tabs [role="tab"] {
   background: transparent;
   border: 0;
-  border-bottom: 2px solid #fff;
+  border-bottom: 2px solid transparent;
   color: #fff;
   cursor: pointer;
   font: inherit;
   margin-bottom: -1px;
   padding: 7px 4px;
+}
+
+.mcanvas-config-panel-tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: #fff;
 }
 
 .mcanvas-config-footer {

@@ -4,11 +4,16 @@
   const NAVIGATION_SELECTOR = ".ic-app-header__main-navigation";
   const LIST_ITEM_SELECTOR = ".ic-app-header__menu-list-item";
   const COURSE_NAVIGATION_SELECTOR = "#section-tabs";
+  const SIDEBAR_SELECTOR = "#right-side-wrapper";
   const COURSE_HIDDEN_CLASS = "mcanvas-course-navigation-hidden";
+  const SIDEBAR_HIDDEN_CLASS = "mcanvas-sidebar-item-hidden";
   const MCANVAS_KEY = "mcanvas:configuration";
   const HIDDEN_CLASS = "mcanvas-overflow-hidden";
   const STORAGE_KEY = "globalNavigation";
   const COURSE_STORAGE_KEY = "courseNavigation";
+  const SIDEBAR_STORAGE_KEY = "globalSidebar";
+  const MCANVAS_TODO_KEY = "mcanvas:todo";
+  const CANVAS_SIDEBAR_KEY = "canvas:sidebar";
   const GLOBAL_CONTEXT = "global-navigation";
   const MORE_COURSES_CONTEXT = "more-courses";
   const GLOBAL_EXPANSION_KEY = "mcanvas:globalNavigationExpanded";
@@ -35,19 +40,23 @@
   }
 
   const defaultOrder = [];
+  const sidebarDefaultOrder = [MCANVAS_TODO_KEY, CANVAS_SIDEBAR_KEY];
   let navigationModel = [];
+  let sidebarModel = [];
   let dialogEscapeHandler;
   let navigationObserver;
   let overflowExpanded = readExpansionState(GLOBAL_EXPANSION_KEY);
   let refreshFrame;
   let savedSettings = { order: [], overflow: [] };
   let savedCourseSettings = {};
+  let savedSidebarSettings = { order: [], hidden: [] };
   let configurationDialogOpening = false;
   let favoriteCourses = [];
   let availableCourses = [];
   let showingAllCourses = false;
   let courseOverflowExpanded = false;
   let expandedCourseId;
+  let activeConfigurationPanel = "navigation";
 
   function setGlobalOverflowExpanded(expanded) {
     overflowExpanded = expanded;
@@ -89,6 +98,75 @@
     chrome.storage.sync.set({ [STORAGE_KEY]: savedSettings }, () => {
       if (chrome.runtime.lastError) {
         console.warn("mCanvas could not save navigation settings:", chrome.runtime.lastError.message);
+      }
+    });
+  }
+
+  function normalizedSidebarSettings(stored) {
+    const knownKeys = new Set(sidebarDefaultOrder);
+    return {
+      order: Array.isArray(stored?.order)
+        ? stored.order.filter((key) => knownKeys.has(key))
+        : [],
+      hidden: Array.isArray(stored?.hidden)
+        ? stored.hidden.filter((key) => knownKeys.has(key))
+        : [],
+    };
+  }
+
+  function buildSidebarModel() {
+    const hiddenKeys = new Set(savedSidebarSettings.hidden);
+    const preferredOrder = [
+      ...savedSidebarSettings.order,
+      ...sidebarDefaultOrder.filter((key) => !savedSidebarSettings.order.includes(key)),
+    ];
+    const positions = new Map(preferredOrder.map((key, index) => [key, index]));
+    sidebarModel = [
+      { key: MCANVAS_TODO_KEY, label: "To-do list" },
+      { key: CANVAS_SIDEBAR_KEY, label: "Native Canvas sidebar content" },
+    ]
+      .map((item) => ({
+        ...item,
+        visibility: hiddenKeys.has(item.key) ? "overflow" : "primary",
+        configurable: true,
+      }))
+      .sort((first, second) =>
+        positions.get(first.key) - positions.get(second.key)
+      );
+  }
+
+  function readSidebarSettings() {
+    return new Promise((resolve) => {
+      chrome.storage.sync.get(SIDEBAR_STORAGE_KEY, (result) => {
+        if (chrome.runtime.lastError) {
+          console.warn("mCanvas could not read sidebar settings:", chrome.runtime.lastError.message);
+          resolve(normalizedSidebarSettings());
+          return;
+        }
+        resolve(normalizedSidebarSettings(result[SIDEBAR_STORAGE_KEY]));
+      });
+    });
+  }
+
+  function writeSidebarSettings() {
+    savedSidebarSettings = {
+      order: sidebarModel.map((item) => item.key),
+      hidden: sidebarModel
+        .filter((item) => item.visibility === "overflow")
+        .map((item) => item.key),
+    };
+    chrome.storage.sync.set({ [SIDEBAR_STORAGE_KEY]: savedSidebarSettings }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn("mCanvas could not save sidebar settings:", chrome.runtime.lastError.message);
+      }
+    });
+  }
+
+  function clearSidebarSettings() {
+    savedSidebarSettings = normalizedSidebarSettings();
+    chrome.storage.sync.remove(SIDEBAR_STORAGE_KEY, () => {
+      if (chrome.runtime.lastError) {
+        console.warn("mCanvas could not clear sidebar settings:", chrome.runtime.lastError.message);
       }
     });
   }
@@ -367,6 +445,55 @@
       .replace(/\s+/g, " ");
   }
 
+  function sidebarContainer() {
+    return document.querySelector(SIDEBAR_SELECTOR) || undefined;
+  }
+
+  function ensureTodoPlaceholder(container) {
+    const existing = document.querySelector(`${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`);
+    if (existing) {
+      if (existing.parentElement !== container) container.append(existing);
+      return existing;
+    }
+    const placeholder = document.createElement("section");
+    placeholder.className = "mcanvas-todo-placeholder";
+    placeholder.dataset.mcanvasOwned = "true";
+    placeholder.setAttribute("aria-label", "To-do list placeholder");
+    placeholder.textContent = "To-do list";
+    container.append(placeholder);
+    return placeholder;
+  }
+
+  function applySidebarLayout() {
+    const container = sidebarContainer();
+    if (!container) {
+      document.body?.classList.remove("mcanvas-sidebar-empty");
+      return;
+    }
+    const todoPlaceholder = ensureTodoPlaceholder(container);
+    const canvasElements = [...container.children].filter(
+      (element) => !element.dataset.mcanvasOwned
+    );
+    const itemsByKey = new Map(sidebarModel.map((item) => [item.key, item]));
+    const todoVisible = itemsByKey.get(MCANVAS_TODO_KEY)?.visibility !== "overflow";
+    const canvasVisible = itemsByKey.get(CANVAS_SIDEBAR_KEY)?.visibility !== "overflow";
+
+    todoPlaceholder.classList.toggle(SIDEBAR_HIDDEN_CLASS, !todoVisible);
+    container.classList.toggle("mcanvas-native-sidebar-hidden", !canvasVisible);
+    for (const element of canvasElements) {
+      element.classList.toggle(SIDEBAR_HIDDEN_CLASS, !canvasVisible);
+    }
+    const todoComesFirst = sidebarModel.findIndex((item) => item.key === MCANVAS_TODO_KEY) <
+      sidebarModel.findIndex((item) => item.key === CANVAS_SIDEBAR_KEY);
+    if (todoComesFirst) container.prepend(todoPlaceholder);
+    else container.append(todoPlaceholder);
+
+    document.body?.classList.toggle(
+      "mcanvas-sidebar-empty",
+      !todoVisible && (!canvasVisible || canvasElements.length === 0)
+    );
+  }
+
   function discoverCanvasItems(navigation) {
     const usedKeys = new Set();
     return [...navigation.querySelectorAll(LIST_ITEM_SELECTOR)]
@@ -504,22 +631,23 @@
 
   function refreshNavigation() {
     const navigation = document.querySelector(NAVIGATION_SELECTOR);
-    if (!navigation) return;
-
     navigationObserver?.disconnect();
-    const discoveredItems = discoverCanvasItems(navigation);
-    const knownDefaultKeys = new Set(defaultOrder);
-    discoveredItems.forEach((item) => {
-      if (!knownDefaultKeys.has(item.key)) {
-        defaultOrder.push(item.key);
-        knownDefaultKeys.add(item.key);
-      }
-    });
-    ensureMCanvasItem(navigation);
-    mergeNavigationModel(discoveredItems);
-    applyNavigationLayout(navigation);
+    if (navigation) {
+      const discoveredItems = discoverCanvasItems(navigation);
+      const knownDefaultKeys = new Set(defaultOrder);
+      discoveredItems.forEach((item) => {
+        if (!knownDefaultKeys.has(item.key)) {
+          defaultOrder.push(item.key);
+          knownDefaultKeys.add(item.key);
+        }
+      });
+      ensureMCanvasItem(navigation);
+      mergeNavigationModel(discoveredItems);
+      applyNavigationLayout(navigation);
+    }
     const courseId = currentCourseId();
     if (courseId) applyCourseNavigation(courseId);
+    applySidebarLayout();
     navigationObserver?.observe(document.documentElement, { childList: true, subtree: true });
   }
 
@@ -564,6 +692,11 @@
     let editorDefaultVisibility = new Map(
       navigationModel.map((item) => [item.key, "primary"])
     );
+    let sidebarEditorModel = sidebarModel;
+    const sidebarEditorDefaultOrder = [...sidebarDefaultOrder];
+    const sidebarEditorDefaultVisibility = new Map(
+      sidebarModel.map((item) => [item.key, "primary"])
+    );
     let activeContext = GLOBAL_CONTEXT;
 
     if (requestedCourseId) {
@@ -579,6 +712,7 @@
         console.warn("mCanvas could not load course navigation:", error);
       }
     }
+    if (activeContext !== GLOBAL_CONTEXT) activeConfigurationPanel = "navigation";
     configurationDialogOpening = false;
     if (document.querySelector(".mcanvas-config-backdrop")) return;
 
@@ -594,10 +728,11 @@
           <select id="mcanvas-config-context"></select>
         </div>
         <div class="mcanvas-config-panel-tabs" role="tablist" aria-label="Configuration section">
-          <button id="mcanvas-navigation-tab" role="tab" aria-selected="true" aria-controls="mcanvas-navigation-panel" tabindex="0" type="button">Navigation</button>
+          <button id="mcanvas-navigation-tab" role="tab" aria-selected="false" aria-controls="mcanvas-navigation-panel" tabindex="-1" type="button" data-panel="navigation">Navigation</button>
+          ${activeContext === GLOBAL_CONTEXT ? '<button id="mcanvas-sidebar-tab" role="tab" aria-selected="false" aria-controls="mcanvas-sidebar-panel" tabindex="-1" type="button" data-panel="sidebar">Sidebar</button>' : ""}
         </div>
         <p class="mcanvas-sr-only" aria-live="polite" aria-atomic="true"></p>
-        <div id="mcanvas-navigation-panel" role="tabpanel" aria-labelledby="mcanvas-navigation-tab">
+        <div id="mcanvas-navigation-panel" role="tabpanel" aria-labelledby="mcanvas-navigation-tab" data-panel="navigation">
           <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-visible-heading">
             <h3 class="mcanvas-config-group-heading" id="mcanvas-visible-heading">Visible</h3>
             <ul class="mcanvas-config-tab-list" data-visibility="primary"></ul>
@@ -611,15 +746,29 @@
             <button class="mcanvas-config-restore-button" type="button">Restore Defaults</button>
           </footer>
         </div>
+        ${activeContext === GLOBAL_CONTEXT ? `
+          <div id="mcanvas-sidebar-panel" role="tabpanel" aria-labelledby="mcanvas-sidebar-tab" data-panel="sidebar" hidden>
+            <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-sidebar-visible-heading">
+              <h3 class="mcanvas-config-group-heading" id="mcanvas-sidebar-visible-heading">Visible</h3>
+              <ul class="mcanvas-config-tab-list" data-visibility="primary"></ul>
+            </section>
+            <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-sidebar-hidden-heading">
+              <h3 class="mcanvas-config-group-heading" id="mcanvas-sidebar-hidden-heading">Hidden</h3>
+              <ul class="mcanvas-config-tab-list" data-visibility="overflow"></ul>
+            </section>
+            <footer class="mcanvas-config-footer">
+              <p class="mcanvas-config-keyboard-tip"><code>↑/↓</code> to focus · <code>Alt + ↑/↓</code> to reorder</p>
+              <button class="mcanvas-config-restore-button" type="button" data-panel="sidebar">Restore Defaults</button>
+            </footer>
+          </div>` : ""}
       </section>`;
 
     const tabLists = [...backdrop.querySelectorAll(".mcanvas-config-tab-list")];
-    const visibleList = backdrop.querySelector('[data-visibility="primary"]');
-    const hiddenList = backdrop.querySelector('[data-visibility="overflow"]');
-    const configurableItems = editorModel.filter((candidate) => candidate.configurable);
     const dialog = backdrop.querySelector(".mcanvas-config-dialog");
     const contextSelect = backdrop.querySelector("#mcanvas-config-context");
-    const restoreButton = backdrop.querySelector(".mcanvas-config-restore-button");
+    const navigationRestoreButton = backdrop.querySelector(".mcanvas-config-restore-button:not([data-panel])");
+    navigationRestoreButton.dataset.panel = "navigation";
+    const restoreButtons = [...backdrop.querySelectorAll(".mcanvas-config-restore-button")];
     const announcer = backdrop.querySelector(".mcanvas-sr-only");
     let dragSession;
     let suppressClick = false;
@@ -639,7 +788,7 @@
       generalGroup.label = "General";
       const globalOption = document.createElement("option");
       globalOption.value = GLOBAL_CONTEXT;
-      globalOption.textContent = "Global navigation";
+      globalOption.textContent = "Global";
       generalGroup.append(globalOption);
       contextSelect.append(generalGroup);
 
@@ -665,6 +814,42 @@
 
     populateContextSelect();
 
+    const panelTabs = [...backdrop.querySelectorAll('.mcanvas-config-panel-tabs [role="tab"]')];
+
+    function activateConfigurationPanel(panelName, moveFocus = false) {
+      const selectedTab = panelTabs.find((tab) => tab.dataset.panel === panelName) || panelTabs[0];
+      if (!selectedTab) return;
+      activeConfigurationPanel = selectedTab.dataset.panel;
+      for (const tab of panelTabs) {
+        const selected = tab === selectedTab;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      }
+      backdrop.querySelectorAll('[role="tabpanel"]').forEach((panel) => {
+        panel.hidden = panel.dataset.panel !== activeConfigurationPanel;
+      });
+      if (moveFocus) selectedTab.focus();
+    }
+
+    for (const tab of panelTabs) {
+      tab.addEventListener("click", () => activateConfigurationPanel(tab.dataset.panel));
+      tab.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const currentIndex = panelTabs.indexOf(tab);
+        let nextIndex;
+        if (event.key === "Home") nextIndex = 0;
+        else if (event.key === "End") nextIndex = panelTabs.length - 1;
+        else if (event.key === "ArrowLeft") {
+          nextIndex = (currentIndex - 1 + panelTabs.length) % panelTabs.length;
+        } else {
+          nextIndex = (currentIndex + 1) % panelTabs.length;
+        }
+        activateConfigurationPanel(panelTabs[nextIndex].dataset.panel, true);
+      });
+    }
+    activateConfigurationPanel(activeConfigurationPanel);
+
     function announce(message) {
       announcer.textContent = "";
       window.requestAnimationFrame(() => {
@@ -681,6 +866,28 @@
       });
     }
 
+    function panelElement(panelName) {
+      return backdrop.querySelector(`[role="tabpanel"][data-panel="${panelName}"]`);
+    }
+
+    function listsForPanel(panelName) {
+      const panel = panelElement(panelName);
+      return {
+        all: [...panel.querySelectorAll(".mcanvas-config-tab-list")],
+        visible: panel.querySelector('[data-visibility="primary"]'),
+        hidden: panel.querySelector('[data-visibility="overflow"]'),
+      };
+    }
+
+    function modelForPanel(panelName) {
+      return panelName === "sidebar" ? sidebarEditorModel : editorModel;
+    }
+
+    function setModelForPanel(panelName, model) {
+      if (panelName === "sidebar") sidebarEditorModel = model;
+      else editorModel = model;
+    }
+
     function updateRowPositions() {
       tabLists.forEach((list) => {
         const groupName = list.dataset.visibility === "primary" ? "Visible" : "Hidden";
@@ -695,9 +902,11 @@
       });
     }
 
-    function applyRowOrder(message, persist = true) {
-      const itemsByKey = new Map(editorModel.map((item) => [item.key, item]));
-      const configured = tabLists.flatMap((list) =>
+    function applyRowOrder(message, persist = true, panelName = activeConfigurationPanel) {
+      const model = modelForPanel(panelName);
+      const lists = listsForPanel(panelName);
+      const itemsByKey = new Map(model.map((item) => [item.key, item]));
+      const configured = lists.all.flatMap((list) =>
         [...list.querySelectorAll(":scope > .mcanvas-config-tab-row")].map((row) => {
           const item = itemsByKey.get(row.dataset.key);
           if (!item) return undefined;
@@ -707,10 +916,14 @@
         })
       ).filter(Boolean);
       const orderedKeys = new Set(configured.map((item) => item.key));
-      const unlisted = editorModel.filter((item) => !orderedKeys.has(item.key));
-      editorModel = [...configured, ...unlisted];
+      const unlisted = model.filter((item) => !orderedKeys.has(item.key));
+      const nextModel = [...configured, ...unlisted];
+      setModelForPanel(panelName, nextModel);
 
-      if (activeContext === GLOBAL_CONTEXT) {
+      if (panelName === "sidebar") {
+        sidebarModel = nextModel;
+        if (persist) writeSidebarSettings();
+      } else if (activeContext === GLOBAL_CONTEXT) {
         navigationModel = editorModel;
         if (persist) writeSettings();
       } else {
@@ -718,7 +931,9 @@
       }
 
       navigationObserver?.disconnect();
-      if (activeContext === GLOBAL_CONTEXT) {
+      if (panelName === "sidebar") {
+        applySidebarLayout();
+      } else if (activeContext === GLOBAL_CONTEXT) {
         applyNavigationLayout(document.querySelector(NAVIGATION_SELECTOR));
       } else {
         applyCourseNavigation(requestedCourseId, editorModel);
@@ -728,15 +943,16 @@
       if (message) announce(message);
     }
 
-    function restoreRowOrder() {
+    function restoreRowOrder(panelName) {
+      const lists = listsForPanel(panelName);
       const rowsByKey = new Map(
-        tabLists.flatMap((list) => [...list.querySelectorAll(":scope > .mcanvas-config-tab-row")])
+        lists.all.flatMap((list) => [...list.querySelectorAll(":scope > .mcanvas-config-tab-row")])
           .map((candidate) => [candidate.dataset.key, candidate])
       );
-      for (const modelItem of editorModel) {
+      for (const modelItem of modelForPanel(panelName)) {
         const modelRow = rowsByKey.get(modelItem.key);
         if (modelRow) {
-          const destination = modelItem.visibility === "primary" ? visibleList : hiddenList;
+          const destination = modelItem.visibility === "primary" ? lists.visible : lists.hidden;
           destination.append(modelRow);
         }
       }
@@ -760,9 +976,13 @@
         row.classList.remove("mcanvas-config-tab-row-dragging");
         if (commit) {
           const groupName = row.parentElement.dataset.visibility === "primary" ? "Visible" : "Hidden";
-          applyRowOrder(`${row.querySelector(".mcanvas-config-tab-name")?.textContent} moved to ${groupName}.`);
+          applyRowOrder(
+            `${row.querySelector(".mcanvas-config-tab-name")?.textContent} moved to ${groupName}.`,
+            true,
+            row.dataset.panel
+          );
         } else {
-          restoreRowOrder();
+          restoreRowOrder(row.dataset.panel);
         }
         suppressClick = true;
         window.setTimeout(() => {
@@ -828,7 +1048,7 @@
           ?.closest(".mcanvas-config-tab-group")
           ?.querySelector(".mcanvas-config-tab-list");
       }
-      if (!destinationList) return;
+      if (!destinationList || destinationList.closest("[role='tabpanel']")?.dataset.panel !== dragSession.row.dataset.panel) return;
 
       const nextRow = [...destinationList.querySelectorAll(".mcanvas-config-tab-row")].find(
         (candidate) => event.clientY < candidate.getBoundingClientRect().top + candidate.offsetHeight / 2
@@ -863,11 +1083,17 @@
 
     backdrop.mcanvasCancelDrag = cancelDrag;
 
-    for (const item of configurableItems) {
-      const row = document.createElement("li");
-      row.className = "mcanvas-config-tab-row";
-      row.dataset.key = item.key;
-      row.tabIndex = 0;
+    const panelItems = [["navigation", editorModel]];
+    if (activeContext === GLOBAL_CONTEXT) panelItems.push(["sidebar", sidebarEditorModel]);
+
+    for (const [panelName, panelModel] of panelItems) {
+      const lists = listsForPanel(panelName);
+      for (const item of panelModel.filter((candidate) => candidate.configurable)) {
+        const row = document.createElement("li");
+        row.className = "mcanvas-config-tab-row";
+        row.dataset.key = item.key;
+        row.dataset.panel = panelName;
+        row.tabIndex = 0;
 
       const handle = document.createElement("span");
       handle.className = "mcanvas-config-drag-handle";
@@ -881,18 +1107,22 @@
       name.textContent = item.label;
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
-      checkbox.id = `mcanvas-visibility-${textKey(item.key)}`;
+      checkbox.id = `mcanvas-${panelName}-visibility-${textKey(item.key)}`;
       checkbox.checked = item.visibility === "primary";
-      checkbox.setAttribute("aria-label", `Show ${item.label} immediately`);
+      checkbox.setAttribute("aria-label", `Show ${item.label}`);
       checkbox.addEventListener("change", () => {
-        if (checkbox.checked) {
+        if (panelName === "navigation" && checkbox.checked) {
           if (activeContext === GLOBAL_CONTEXT) setGlobalOverflowExpanded(false);
           else setCourseOverflowExpanded(requestedCourseId, false);
         }
-        const destination = checkbox.checked ? visibleList : hiddenList;
+        const destination = checkbox.checked ? lists.visible : lists.hidden;
         if (checkbox.checked) destination.append(row);
         else destination.prepend(row);
-        applyRowOrder(`${item.label} moved to ${checkbox.checked ? "Visible" : "Hidden"}.`);
+        applyRowOrder(
+          `${item.label} moved to ${checkbox.checked ? "Visible" : "Hidden"}.`,
+          true,
+          panelName
+        );
         restoreRowFocus(row);
       });
       label.append(name);
@@ -926,7 +1156,7 @@
           ["ArrowUp", "ArrowDown"].includes(event.key)
         ) {
           event.preventDefault();
-          const rows = tabLists.flatMap((list) => [
+          const rows = lists.all.flatMap((list) => [
             ...list.querySelectorAll(":scope > .mcanvas-config-tab-row"),
           ]);
           const currentIndex = rows.indexOf(row);
@@ -936,7 +1166,7 @@
         }
         if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
         event.preventDefault();
-        const allRows = tabLists.flatMap((list) => [
+        const allRows = lists.all.flatMap((list) => [
           ...list.querySelectorAll(":scope > .mcanvas-config-tab-row"),
         ]);
         const rowIndex = allRows.indexOf(row);
@@ -944,8 +1174,8 @@
         const sourceList = row.parentElement;
         let destinationList = target?.parentElement;
         if (!target) {
-          if (event.key === "ArrowDown" && sourceList === visibleList) destinationList = hiddenList;
-          else if (event.key === "ArrowUp" && sourceList === hiddenList) destinationList = visibleList;
+          if (event.key === "ArrowDown" && sourceList === lists.visible) destinationList = lists.hidden;
+          else if (event.key === "ArrowUp" && sourceList === lists.hidden) destinationList = lists.visible;
           else return;
         }
         const crossesGroupBoundary = sourceList !== destinationList;
@@ -960,12 +1190,13 @@
           target.after(row);
         }
         const destinationName = destinationList.dataset.visibility === "primary" ? "Visible" : "Hidden";
-        applyRowOrder(`${item.label} moved in ${destinationName}.`);
+        applyRowOrder(`${item.label} moved in ${destinationName}.`, true, panelName);
         restoreRowFocus(row);
       });
 
-      const destination = item.visibility === "primary" ? visibleList : hiddenList;
+      const destination = item.visibility === "primary" ? lists.visible : lists.hidden;
       destination.append(row);
+      }
     }
     updateRowPositions();
 
@@ -999,30 +1230,50 @@
       openConfigurationDialog(nextContext);
     });
 
-    restoreButton.addEventListener("click", () => {
-      const defaultPositions = new Map(editorDefaultOrder.map((key, index) => [key, index]));
-      editorModel.sort((first, second) =>
-        (defaultPositions.get(first.key) ?? Number.MAX_SAFE_INTEGER) -
-        (defaultPositions.get(second.key) ?? Number.MAX_SAFE_INTEGER)
-      );
-      editorModel.forEach((item) => {
-        item.visibility = editorDefaultVisibility.get(item.key) || "primary";
-        const row = backdrop.querySelector(
-          `.mcanvas-config-tab-row[data-key="${CSS.escape(item.key)}"]`
+    for (const restoreButton of restoreButtons) {
+      restoreButton.addEventListener("click", () => {
+        const panelName = restoreButton.dataset.panel;
+        const lists = listsForPanel(panelName);
+        const model = modelForPanel(panelName);
+        const defaultOrderForPanel = panelName === "sidebar"
+          ? sidebarEditorDefaultOrder
+          : editorDefaultOrder;
+        const defaultVisibilityForPanel = panelName === "sidebar"
+          ? sidebarEditorDefaultVisibility
+          : editorDefaultVisibility;
+        const defaultPositions = new Map(defaultOrderForPanel.map((key, index) => [key, index]));
+        model.sort((first, second) =>
+          (defaultPositions.get(first.key) ?? Number.MAX_SAFE_INTEGER) -
+          (defaultPositions.get(second.key) ?? Number.MAX_SAFE_INTEGER)
         );
-        if (!row) return;
-        const visible = item.visibility === "primary";
-        row.querySelector("input").checked = visible;
-        (visible ? visibleList : hiddenList).append(row);
+        model.forEach((item) => {
+          item.visibility = defaultVisibilityForPanel.get(item.key) || "primary";
+          const row = panelElement(panelName).querySelector(
+            `.mcanvas-config-tab-row[data-key="${CSS.escape(item.key)}"]`
+          );
+          if (!row) return;
+          const visible = item.visibility === "primary";
+          row.querySelector("input").checked = visible;
+          (visible ? lists.visible : lists.hidden).append(row);
+        });
+        if (panelName === "sidebar") {
+          sidebarModel = model;
+          clearSidebarSettings();
+        } else if (activeContext === GLOBAL_CONTEXT) {
+          setGlobalOverflowExpanded(false);
+        } else {
+          setCourseOverflowExpanded(requestedCourseId, false);
+          clearCourseSettings(requestedCourseId);
+        }
+        const persist = panelName === "navigation" && activeContext === GLOBAL_CONTEXT;
+        applyRowOrder(
+          `${panelName === "sidebar" ? "Sidebar" : "Navigation"} defaults restored.`,
+          persist,
+          panelName
+        );
+        restoreButton.focus();
       });
-      if (activeContext === GLOBAL_CONTEXT) setGlobalOverflowExpanded(false);
-      else {
-        setCourseOverflowExpanded(requestedCourseId, false);
-        clearCourseSettings(requestedCourseId);
-      }
-      applyRowOrder("Navigation defaults restored.", activeContext === GLOBAL_CONTEXT);
-      restoreButton.focus();
-    });
+    }
 
     backdrop.addEventListener("click", (event) => {
       if (event.target === backdrop) {
@@ -1056,7 +1307,11 @@
       event.preventDefault();
       event.stopPropagation();
       if (event.key === "Tab") contextSelect.focus();
-      else backdrop.querySelector(".mcanvas-config-tab-row")?.focus();
+      else {
+        const activePanel = backdrop.querySelector('[role="tabpanel"]:not([hidden])');
+        (activePanel?.querySelector(".mcanvas-config-tab-row") ||
+          backdrop.querySelector('[role="tab"][aria-selected="true"]'))?.focus();
+      }
       document.removeEventListener("keydown", focusFirstRowOnKeyboardEntry, true);
     }
     backdrop.addEventListener("pointerdown", markPointerInteraction, {
@@ -1070,11 +1325,11 @@
 
     backdrop.addEventListener("keydown", (event) => {
       if (event.key !== "Tab") return;
+      const activePanel = backdrop.querySelector('[role="tabpanel"]:not([hidden])');
       const focusable = [
         contextSelect,
-        backdrop.querySelector('[role="tab"]'),
-        ...backdrop.querySelectorAll('.mcanvas-config-tab-row, input:not(:disabled)'),
-        restoreButton,
+        ...panelTabs,
+        ...activePanel.querySelectorAll('.mcanvas-config-tab-row, input:not(:disabled), button:not(:disabled)'),
       ].filter(Boolean);
       const first = focusable[0];
       const last = focusable.at(-1);
@@ -1092,10 +1347,12 @@
   }
 
   async function initialize() {
-    [savedSettings, savedCourseSettings] = await Promise.all([
+    [savedSettings, savedCourseSettings, savedSidebarSettings] = await Promise.all([
       readSettings(),
       readCourseSettings(),
+      readSidebarSettings(),
     ]);
+    buildSidebarModel();
     navigationObserver = new MutationObserver(scheduleRefresh);
     navigationObserver.observe(document.documentElement, { childList: true, subtree: true });
     refreshNavigation();
@@ -1121,6 +1378,14 @@
           savedCourseSettings = nextSettings;
           const courseId = currentCourseId();
           if (courseId) applyCourseNavigation(courseId);
+        }
+      }
+      if (changes[SIDEBAR_STORAGE_KEY]) {
+        const nextSettings = normalizedSidebarSettings(changes[SIDEBAR_STORAGE_KEY].newValue);
+        if (JSON.stringify(nextSettings) !== JSON.stringify(savedSidebarSettings)) {
+          savedSidebarSettings = nextSettings;
+          buildSidebarModel();
+          refreshNavigation();
         }
       }
     });
