@@ -3,17 +3,62 @@
 
   const NAVIGATION_SELECTOR = ".ic-app-header__main-navigation";
   const LIST_ITEM_SELECTOR = ".ic-app-header__menu-list-item";
+  const COURSE_NAVIGATION_SELECTOR = "#section-tabs";
+  const COURSE_HIDDEN_CLASS = "mcanvas-course-navigation-hidden";
   const MCANVAS_KEY = "mcanvas:configuration";
   const HIDDEN_CLASS = "mcanvas-overflow-hidden";
   const STORAGE_KEY = "globalNavigation";
+  const COURSE_STORAGE_KEY = "courseNavigation";
+  const GLOBAL_CONTEXT = "global-navigation";
+  const MORE_COURSES_CONTEXT = "more-courses";
+  const GLOBAL_EXPANSION_KEY = "mcanvas:globalNavigationExpanded";
+  const COURSE_EXPANSION_KEY_PREFIX = "mcanvas:courseNavigationExpanded:";
+
+  function readExpansionState(key) {
+    try {
+      return window.sessionStorage.getItem(key) === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  function writeExpansionState(key, expanded) {
+    try {
+      window.sessionStorage.setItem(key, String(expanded));
+    } catch {
+      // Navigation expansion can remain in memory if session storage is unavailable.
+    }
+  }
+
+  function courseExpansionKey(courseId) {
+    return `${COURSE_EXPANSION_KEY_PREFIX}${courseId}`;
+  }
 
   const defaultOrder = [];
   let navigationModel = [];
   let dialogEscapeHandler;
   let navigationObserver;
-  let overflowExpanded = false;
+  let overflowExpanded = readExpansionState(GLOBAL_EXPANSION_KEY);
   let refreshFrame;
   let savedSettings = { order: [], overflow: [] };
+  let savedCourseSettings = {};
+  let configurationDialogOpening = false;
+  let favoriteCourses = [];
+  let availableCourses = [];
+  let showingAllCourses = false;
+  let courseOverflowExpanded = false;
+  let expandedCourseId;
+
+  function setGlobalOverflowExpanded(expanded) {
+    overflowExpanded = expanded;
+    writeExpansionState(GLOBAL_EXPANSION_KEY, expanded);
+  }
+
+  function setCourseOverflowExpanded(courseId, expanded) {
+    expandedCourseId = String(courseId);
+    courseOverflowExpanded = expanded;
+    writeExpansionState(courseExpansionKey(courseId), expanded);
+  }
 
   function readSettings() {
     return new Promise((resolve) => {
@@ -46,6 +91,225 @@
         console.warn("mCanvas could not save navigation settings:", chrome.runtime.lastError.message);
       }
     });
+  }
+
+  function readCourseSettings() {
+    return new Promise((resolve) => {
+      chrome.storage.sync.get(COURSE_STORAGE_KEY, (result) => {
+        if (chrome.runtime.lastError) {
+          console.warn("mCanvas could not read course navigation settings:", chrome.runtime.lastError.message);
+          resolve({});
+          return;
+        }
+        const stored = result[COURSE_STORAGE_KEY];
+        resolve(stored && typeof stored === "object" ? stored : {});
+      });
+    });
+  }
+
+  function courseSettings(courseId) {
+    const hostSettings = savedCourseSettings[window.location.host];
+    const stored = hostSettings?.[String(courseId)];
+    return {
+      order: Array.isArray(stored?.order) ? stored.order : [],
+      hidden: Array.isArray(stored?.hidden) ? stored.hidden : [],
+    };
+  }
+
+  function writeCourseSettings(courseId, model) {
+    const host = window.location.host;
+    savedCourseSettings = {
+      ...savedCourseSettings,
+      [host]: {
+        ...savedCourseSettings[host],
+        [String(courseId)]: {
+          order: model.map((item) => item.key),
+          hidden: model.filter((item) => item.visibility === "overflow").map((item) => item.key),
+        },
+      },
+    };
+    chrome.storage.sync.set({ [COURSE_STORAGE_KEY]: savedCourseSettings }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn("mCanvas could not save course navigation settings:", chrome.runtime.lastError.message);
+      }
+    });
+  }
+
+  function clearCourseSettings(courseId) {
+    const host = window.location.host;
+    const hostSettings = { ...savedCourseSettings[host] };
+    delete hostSettings[String(courseId)];
+
+    savedCourseSettings = { ...savedCourseSettings };
+    if (Object.keys(hostSettings).length > 0) savedCourseSettings[host] = hostSettings;
+    else delete savedCourseSettings[host];
+
+    chrome.storage.sync.set({ [COURSE_STORAGE_KEY]: savedCourseSettings }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn("mCanvas could not clear course navigation settings:", chrome.runtime.lastError.message);
+      }
+    });
+  }
+
+  function currentCourseId() {
+    return window.location.pathname.match(/^\/courses\/([^/]+)/)?.[1];
+  }
+
+  async function fetchCanvasCollection(path) {
+    const items = [];
+    let nextUrl = new URL(path, window.location.origin).href;
+    while (nextUrl) {
+      const response = await fetch(nextUrl, { credentials: "same-origin" });
+      if (!response.ok) throw new Error(`Canvas request failed (${response.status})`);
+      const result = await response.json();
+      if (Array.isArray(result)) items.push(...result);
+      const nextLink = response.headers.get("Link")
+        ?.split(",")
+        .find((link) => /rel="next"/.test(link));
+      nextUrl = nextLink?.match(/<([^>]+)>/)?.[1] || "";
+    }
+    return items;
+  }
+
+  function courseLabel(course) {
+    return course.name || course.course_code || `Course ${course.id}`;
+  }
+
+  async function fetchFavoriteCourses() {
+    const courses = await fetchCanvasCollection(
+      "/api/v1/users/self/favorites/courses?per_page=100&exclude_blueprint_courses=true"
+    );
+    return courses.map((course) => ({ id: String(course.id), name: courseLabel(course) }));
+  }
+
+  async function fetchActiveCourses() {
+    const courses = await fetchCanvasCollection(
+      "/api/v1/courses?per_page=100&enrollment_state=active&state[]=available"
+    );
+    return courses.map((course) => ({ id: String(course.id), name: courseLabel(course) }));
+  }
+
+  function courseTabKey(href, fallback) {
+    try {
+      const pathname = new URL(href, window.location.origin).pathname;
+      const match = pathname.match(/^\/courses\/[^/]+(?:\/(.*))?$/);
+      if (match) return `canvas-course:${match[1] || "home"}`;
+    } catch {
+      // Fall through to the Canvas tab identifier.
+    }
+    return `canvas-course:${textKey(String(fallback || href || "navigation-item"))}`;
+  }
+
+  function courseModelFromTabs(tabs, settings) {
+    const hiddenKeys = new Set(settings.hidden);
+    const items = tabs
+      .filter((tab) => !tab.hidden && tab.visibility !== "none")
+      .sort((first, second) =>
+        (Number(first.position) || Number.MAX_SAFE_INTEGER) -
+        (Number(second.position) || Number.MAX_SAFE_INTEGER)
+      )
+      .map((tab) => ({
+        key: courseTabKey(tab.html_url, tab.id),
+        label: tab.label || tab.id || "Navigation item",
+        visibility: hiddenKeys.has(courseTabKey(tab.html_url, tab.id)) ? "overflow" : "primary",
+        configurable: true,
+      }));
+    const positions = new Map(settings.order.map((key, index) => [key, index]));
+    return items.sort((first, second) =>
+      (positions.get(first.key) ?? Number.MAX_SAFE_INTEGER) -
+      (positions.get(second.key) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }
+
+  function discoverCourseItems(navigation) {
+    return [...navigation.querySelectorAll(":scope > li")]
+      .filter((element) => !element.dataset.mcanvasOwned)
+      .map((element) => {
+        const link = element.querySelector("a[href]");
+        return {
+          key: courseTabKey(link?.getAttribute("href"), link?.textContent),
+          label: labelItem(element),
+          visibility: "primary",
+          configurable: true,
+          element,
+        };
+      });
+  }
+
+  function createCourseOverflowToggle(courseId, expanded, hiddenItems) {
+    const item = document.createElement("li");
+    item.className = "section mcanvas-course-overflow-toggle-item";
+    item.dataset.mcanvasOwned = "true";
+
+    const button = document.createElement("button");
+    button.className = "mcanvas-course-overflow-toggle";
+    button.type = "button";
+    button.setAttribute("aria-expanded", String(expanded));
+    button.setAttribute(
+      "aria-controls",
+      hiddenItems.map((hiddenItem) => hiddenItem.element?.id).filter(Boolean).join(" ")
+    );
+    const tooltip = expanded ? "Hide hidden" : "Show hidden";
+    button.setAttribute("aria-label", tooltip);
+    button.title = tooltip;
+    button.innerHTML = '<span class="mcanvas-overflow-dots" aria-hidden="true"></span>';
+    button.addEventListener("click", () => {
+      setCourseOverflowExpanded(courseId, !courseOverflowExpanded);
+      navigationObserver?.disconnect();
+      applyCourseNavigation(courseId);
+      navigationObserver?.observe(document.documentElement, { childList: true, subtree: true });
+      document.querySelector(".mcanvas-course-overflow-toggle")?.focus();
+    });
+    item.append(button);
+    return item;
+  }
+
+  function applyCourseNavigation(courseId, suppliedModel) {
+    if (String(currentCourseId()) !== String(courseId)) return;
+    const navigation = document.querySelector(COURSE_NAVIGATION_SELECTOR);
+    if (!navigation) return;
+    if (expandedCourseId !== String(courseId)) {
+      expandedCourseId = String(courseId);
+      courseOverflowExpanded = readExpansionState(courseExpansionKey(courseId));
+    }
+    navigation.querySelectorAll(".mcanvas-course-overflow-toggle-item").forEach((item) => item.remove());
+    const settings = courseSettings(courseId);
+    const discovered = discoverCourseItems(navigation);
+    const elementsByKey = new Map(discovered.map((item) => [item.key, item.element]));
+    const model = suppliedModel || courseModelFromTabs(discovered.map((item) => ({
+      id: item.key,
+      label: item.label,
+      html_url: item.element.querySelector("a[href]")?.getAttribute("href"),
+    })), settings);
+    const configuredKeys = new Set(model.map((item) => item.key));
+    const ordered = [...model, ...discovered.filter((item) => !configuredKeys.has(item.key))];
+    const hiddenItems = [];
+    for (const item of ordered) {
+      const element = elementsByKey.get(item.key) || item.element;
+      if (!element) continue;
+      const hidden = item.visibility === "overflow";
+      if (hidden) {
+        if (!element.id) element.id = `mcanvas-course-overflow-${textKey(item.key)}`;
+        hiddenItems.push({ ...item, element });
+      }
+      element.classList.toggle(COURSE_HIDDEN_CLASS, hidden && !courseOverflowExpanded);
+      navigation.append(element);
+    }
+    if (hiddenItems.length > 0) {
+      navigation.append(
+        createCourseOverflowToggle(courseId, courseOverflowExpanded, hiddenItems)
+      );
+    } else {
+      setCourseOverflowExpanded(courseId, false);
+    }
+  }
+
+  async function loadCourseModels(courseId) {
+    const tabs = await fetchCanvasCollection(`/api/v1/courses/${encodeURIComponent(courseId)}/tabs?per_page=100`);
+    return {
+      configured: courseModelFromTabs(tabs, courseSettings(courseId)),
+      canvasDefault: courseModelFromTabs(tabs, { order: [], hidden: [] }),
+    };
   }
 
   function normalizedHref(link) {
@@ -163,7 +427,7 @@
     button.innerHTML = `
       <span class="mcanvas-navigation-icon" aria-hidden="true">m</span>
       <span class="mcanvas-navigation-label">mCanvas</span>`;
-    button.addEventListener("click", openConfigurationDialog);
+    button.addEventListener("click", () => openConfigurationDialog());
     item.append(button);
     return item;
   }
@@ -186,7 +450,7 @@
     button.title = tooltip;
     button.innerHTML = '<span class="mcanvas-overflow-dots" aria-hidden="true"></span>';
     button.addEventListener("click", () => {
-      overflowExpanded = !overflowExpanded;
+      setGlobalOverflowExpanded(!overflowExpanded);
       navigationObserver?.disconnect();
       applyNavigationLayout(document.querySelector(NAVIGATION_SELECTOR));
       navigationObserver?.observe(document.documentElement, { childList: true, subtree: true });
@@ -254,6 +518,8 @@
     ensureMCanvasItem(navigation);
     mergeNavigationModel(discoveredItems);
     applyNavigationLayout(navigation);
+    const courseId = currentCourseId();
+    if (courseId) applyCourseNavigation(courseId);
     navigationObserver?.observe(document.documentElement, { childList: true, subtree: true });
   }
 
@@ -273,7 +539,47 @@
     document.querySelector(".mcanvas-navigation-button")?.focus();
   }
 
-  function openConfigurationDialog() {
+  async function openConfigurationDialog(requestedContext) {
+    if (document.querySelector(".mcanvas-config-backdrop") || configurationDialogOpening) return;
+    configurationDialogOpening = true;
+
+    try {
+      if (favoriteCourses.length === 0) favoriteCourses = await fetchFavoriteCourses();
+    } catch (error) {
+      console.warn("mCanvas could not load favorite courses:", error);
+    }
+
+    if (!requestedContext) {
+      const courseId = currentCourseId();
+      requestedContext = favoriteCourses.some((course) => course.id === courseId)
+        ? `course:${courseId}`
+        : GLOBAL_CONTEXT;
+    }
+
+    const requestedCourseId = requestedContext.startsWith("course:")
+      ? requestedContext.slice("course:".length)
+      : undefined;
+    let editorModel = navigationModel;
+    let editorDefaultOrder = [...defaultOrder];
+    let editorDefaultVisibility = new Map(
+      navigationModel.map((item) => [item.key, "primary"])
+    );
+    let activeContext = GLOBAL_CONTEXT;
+
+    if (requestedCourseId) {
+      try {
+        const courseModels = await loadCourseModels(requestedCourseId);
+        editorModel = courseModels.configured;
+        editorDefaultOrder = courseModels.canvasDefault.map((item) => item.key);
+        editorDefaultVisibility = new Map(
+          courseModels.canvasDefault.map((item) => [item.key, item.visibility])
+        );
+        activeContext = requestedContext;
+      } catch (error) {
+        console.warn("mCanvas could not load course navigation:", error);
+      }
+    }
+    configurationDialogOpening = false;
     if (document.querySelector(".mcanvas-config-backdrop")) return;
 
     const backdrop = document.createElement("div");
@@ -282,29 +588,82 @@
       <section class="mcanvas-config-dialog" role="dialog" aria-modal="true" aria-labelledby="mcanvas-config-title" tabindex="-1">
         <header class="mcanvas-config-header">
           <h2 class="mcanvas-config-heading" id="mcanvas-config-title">mCanvas</h2>
-          <button class="mcanvas-config-restore-button" type="button">Restore Defaults</button>
         </header>
-        <p class="mcanvas-config-keyboard-tip"><code>↑/↓</code> to focus · <code>Alt + ↑/↓</code> to reorder</p>
+        <div class="mcanvas-config-context-field">
+          <label for="mcanvas-config-context">Editing</label>
+          <select id="mcanvas-config-context"></select>
+        </div>
+        <div class="mcanvas-config-panel-tabs" role="tablist" aria-label="Configuration section">
+          <button id="mcanvas-navigation-tab" role="tab" aria-selected="true" aria-controls="mcanvas-navigation-panel" tabindex="0" type="button">Navigation</button>
+        </div>
         <p class="mcanvas-sr-only" aria-live="polite" aria-atomic="true"></p>
-        <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-visible-heading">
-          <h3 class="mcanvas-config-group-heading" id="mcanvas-visible-heading">Visible</h3>
-          <ul class="mcanvas-config-tab-list" data-visibility="primary"></ul>
-        </section>
-        <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-hidden-heading">
-          <h3 class="mcanvas-config-group-heading" id="mcanvas-hidden-heading">Hidden</h3>
-          <ul class="mcanvas-config-tab-list" data-visibility="overflow"></ul>
-        </section>
+        <div id="mcanvas-navigation-panel" role="tabpanel" aria-labelledby="mcanvas-navigation-tab">
+          <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-visible-heading">
+            <h3 class="mcanvas-config-group-heading" id="mcanvas-visible-heading">Visible</h3>
+            <ul class="mcanvas-config-tab-list" data-visibility="primary"></ul>
+          </section>
+          <section class="mcanvas-config-tab-group" aria-labelledby="mcanvas-hidden-heading">
+            <h3 class="mcanvas-config-group-heading" id="mcanvas-hidden-heading">Hidden</h3>
+            <ul class="mcanvas-config-tab-list" data-visibility="overflow"></ul>
+          </section>
+          <footer class="mcanvas-config-footer">
+            <p class="mcanvas-config-keyboard-tip"><code>↑/↓</code> to focus · <code>Alt + ↑/↓</code> to reorder</p>
+            <button class="mcanvas-config-restore-button" type="button">Restore Defaults</button>
+          </footer>
+        </div>
       </section>`;
 
     const tabLists = [...backdrop.querySelectorAll(".mcanvas-config-tab-list")];
     const visibleList = backdrop.querySelector('[data-visibility="primary"]');
     const hiddenList = backdrop.querySelector('[data-visibility="overflow"]');
-    const configurableItems = navigationModel.filter((candidate) => candidate.configurable);
+    const configurableItems = editorModel.filter((candidate) => candidate.configurable);
     const dialog = backdrop.querySelector(".mcanvas-config-dialog");
+    const contextSelect = backdrop.querySelector("#mcanvas-config-context");
     const restoreButton = backdrop.querySelector(".mcanvas-config-restore-button");
     const announcer = backdrop.querySelector(".mcanvas-sr-only");
     let dragSession;
     let suppressClick = false;
+
+    function appendCourseOptions(group, courses) {
+      for (const course of courses) {
+        const option = document.createElement("option");
+        option.value = `course:${course.id}`;
+        option.textContent = course.name;
+        group.append(option);
+      }
+    }
+
+    function populateContextSelect() {
+      contextSelect.replaceChildren();
+      const generalGroup = document.createElement("optgroup");
+      generalGroup.label = "General";
+      const globalOption = document.createElement("option");
+      globalOption.value = GLOBAL_CONTEXT;
+      globalOption.textContent = "Global navigation";
+      generalGroup.append(globalOption);
+      contextSelect.append(generalGroup);
+
+      const displayedCourses = showingAllCourses ? availableCourses : favoriteCourses;
+      if (displayedCourses.length > 0) {
+        const courseGroup = document.createElement("optgroup");
+        courseGroup.label = showingAllCourses ? "Active courses" : "Favorite courses";
+        appendCourseOptions(courseGroup, displayedCourses);
+        contextSelect.append(courseGroup);
+      }
+
+      if (!showingAllCourses) {
+        const moreGroup = document.createElement("optgroup");
+        moreGroup.label = "More";
+        const moreOption = document.createElement("option");
+        moreOption.value = MORE_COURSES_CONTEXT;
+        moreOption.textContent = "Show more courses…";
+        moreGroup.append(moreOption);
+        contextSelect.append(moreGroup);
+      }
+      contextSelect.value = activeContext;
+    }
+
+    populateContextSelect();
 
     function announce(message) {
       announcer.textContent = "";
@@ -336,8 +695,8 @@
       });
     }
 
-    function applyRowOrder(message) {
-      const itemsByKey = new Map(navigationModel.map((item) => [item.key, item]));
+    function applyRowOrder(message, persist = true) {
+      const itemsByKey = new Map(editorModel.map((item) => [item.key, item]));
       const configured = tabLists.flatMap((list) =>
         [...list.querySelectorAll(":scope > .mcanvas-config-tab-row")].map((row) => {
           const item = itemsByKey.get(row.dataset.key);
@@ -348,12 +707,22 @@
         })
       ).filter(Boolean);
       const orderedKeys = new Set(configured.map((item) => item.key));
-      const unlisted = navigationModel.filter((item) => !orderedKeys.has(item.key));
-      navigationModel = [...configured, ...unlisted];
-      writeSettings();
+      const unlisted = editorModel.filter((item) => !orderedKeys.has(item.key));
+      editorModel = [...configured, ...unlisted];
+
+      if (activeContext === GLOBAL_CONTEXT) {
+        navigationModel = editorModel;
+        if (persist) writeSettings();
+      } else {
+        if (persist) writeCourseSettings(requestedCourseId, editorModel);
+      }
 
       navigationObserver?.disconnect();
-      applyNavigationLayout(document.querySelector(NAVIGATION_SELECTOR));
+      if (activeContext === GLOBAL_CONTEXT) {
+        applyNavigationLayout(document.querySelector(NAVIGATION_SELECTOR));
+      } else {
+        applyCourseNavigation(requestedCourseId, editorModel);
+      }
       navigationObserver?.observe(document.documentElement, { childList: true, subtree: true });
       updateRowPositions();
       if (message) announce(message);
@@ -364,7 +733,7 @@
         tabLists.flatMap((list) => [...list.querySelectorAll(":scope > .mcanvas-config-tab-row")])
           .map((candidate) => [candidate.dataset.key, candidate])
       );
-      for (const modelItem of navigationModel) {
+      for (const modelItem of editorModel) {
         const modelRow = rowsByKey.get(modelItem.key);
         if (modelRow) {
           const destination = modelItem.visibility === "primary" ? visibleList : hiddenList;
@@ -516,7 +885,10 @@
       checkbox.checked = item.visibility === "primary";
       checkbox.setAttribute("aria-label", `Show ${item.label} immediately`);
       checkbox.addEventListener("change", () => {
-        if (checkbox.checked) overflowExpanded = false;
+        if (checkbox.checked) {
+          if (activeContext === GLOBAL_CONTEXT) setGlobalOverflowExpanded(false);
+          else setCourseOverflowExpanded(requestedCourseId, false);
+        }
         const destination = checkbox.checked ? visibleList : hiddenList;
         if (checkbox.checked) destination.append(row);
         else destination.prepend(row);
@@ -597,23 +969,58 @@
     }
     updateRowPositions();
 
+    contextSelect.addEventListener("change", async () => {
+      const nextContext = contextSelect.value;
+      if (nextContext === MORE_COURSES_CONTEXT) {
+        contextSelect.disabled = true;
+        announce("Loading active courses.");
+        try {
+          const fetchedCourses = await fetchActiveCourses();
+          const coursesById = new Map(
+            [...favoriteCourses, ...fetchedCourses].map((course) => [course.id, course])
+          );
+          availableCourses = [...coursesById.values()].sort((first, second) =>
+            first.name.localeCompare(second.name)
+          );
+          showingAllCourses = true;
+          populateContextSelect();
+          announce("Active courses loaded.");
+        } catch (error) {
+          console.warn("mCanvas could not load active courses:", error);
+          populateContextSelect();
+          announce("Active courses could not be loaded.");
+        }
+        contextSelect.disabled = false;
+        contextSelect.focus();
+        return;
+      }
+      if (nextContext === activeContext) return;
+      closeConfigurationDialog(backdrop);
+      openConfigurationDialog(nextContext);
+    });
+
     restoreButton.addEventListener("click", () => {
-      const defaultPositions = new Map(defaultOrder.map((key, index) => [key, index]));
-      navigationModel.sort((first, second) =>
+      const defaultPositions = new Map(editorDefaultOrder.map((key, index) => [key, index]));
+      editorModel.sort((first, second) =>
         (defaultPositions.get(first.key) ?? Number.MAX_SAFE_INTEGER) -
         (defaultPositions.get(second.key) ?? Number.MAX_SAFE_INTEGER)
       );
-      navigationModel.forEach((item) => {
-        item.visibility = "primary";
+      editorModel.forEach((item) => {
+        item.visibility = editorDefaultVisibility.get(item.key) || "primary";
         const row = backdrop.querySelector(
           `.mcanvas-config-tab-row[data-key="${CSS.escape(item.key)}"]`
         );
         if (!row) return;
-        row.querySelector("input").checked = true;
-        visibleList.append(row);
+        const visible = item.visibility === "primary";
+        row.querySelector("input").checked = visible;
+        (visible ? visibleList : hiddenList).append(row);
       });
-      overflowExpanded = false;
-      applyRowOrder("Navigation defaults restored.");
+      if (activeContext === GLOBAL_CONTEXT) setGlobalOverflowExpanded(false);
+      else {
+        setCourseOverflowExpanded(requestedCourseId, false);
+        clearCourseSettings(requestedCourseId);
+      }
+      applyRowOrder("Navigation defaults restored.", activeContext === GLOBAL_CONTEXT);
       restoreButton.focus();
     });
 
@@ -648,7 +1055,8 @@
       }
       event.preventDefault();
       event.stopPropagation();
-      backdrop.querySelector(".mcanvas-config-tab-row")?.focus();
+      if (event.key === "Tab") contextSelect.focus();
+      else backdrop.querySelector(".mcanvas-config-tab-row")?.focus();
       document.removeEventListener("keydown", focusFirstRowOnKeyboardEntry, true);
     }
     backdrop.addEventListener("pointerdown", markPointerInteraction, {
@@ -663,8 +1071,10 @@
     backdrop.addEventListener("keydown", (event) => {
       if (event.key !== "Tab") return;
       const focusable = [
-        restoreButton,
+        contextSelect,
+        backdrop.querySelector('[role="tab"]'),
         ...backdrop.querySelectorAll('.mcanvas-config-tab-row, input:not(:disabled)'),
+        restoreButton,
       ].filter(Boolean);
       const first = focusable[0];
       const last = focusable.at(-1);
@@ -682,23 +1092,37 @@
   }
 
   async function initialize() {
-    savedSettings = await readSettings();
+    [savedSettings, savedCourseSettings] = await Promise.all([
+      readSettings(),
+      readCourseSettings(),
+    ]);
     navigationObserver = new MutationObserver(scheduleRefresh);
     navigationObserver.observe(document.documentElement, { childList: true, subtree: true });
     refreshNavigation();
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "sync" || !changes[STORAGE_KEY]) return;
-      const updated = changes[STORAGE_KEY].newValue;
-      const nextSettings = {
-        order: Array.isArray(updated?.order) ? updated.order : [],
-        overflow: Array.isArray(updated?.overflow) ? updated.overflow : [],
-      };
-      if (JSON.stringify(nextSettings) === JSON.stringify(savedSettings)) return;
-      savedSettings = nextSettings;
-      navigationModel = [];
-      overflowExpanded = false;
-      refreshNavigation();
+      if (areaName !== "sync") return;
+      if (changes[STORAGE_KEY]) {
+        const updated = changes[STORAGE_KEY].newValue;
+        const nextSettings = {
+          order: Array.isArray(updated?.order) ? updated.order : [],
+          overflow: Array.isArray(updated?.overflow) ? updated.overflow : [],
+        };
+        if (JSON.stringify(nextSettings) !== JSON.stringify(savedSettings)) {
+          savedSettings = nextSettings;
+          navigationModel = [];
+          refreshNavigation();
+        }
+      }
+      if (changes[COURSE_STORAGE_KEY]) {
+        const updated = changes[COURSE_STORAGE_KEY].newValue;
+        const nextSettings = updated && typeof updated === "object" ? updated : {};
+        if (JSON.stringify(nextSettings) !== JSON.stringify(savedCourseSettings)) {
+          savedCourseSettings = nextSettings;
+          const courseId = currentCourseId();
+          if (courseId) applyCourseNavigation(courseId);
+        }
+      }
     });
   }
 

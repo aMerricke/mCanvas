@@ -61,6 +61,44 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
   display: none !important;
 }
 
+.mcanvas-course-navigation-hidden {
+  display: none !important;
+}
+
+.mcanvas-course-overflow-toggle-item {
+  list-style: none;
+}
+
+.mcanvas-course-overflow-toggle {
+  background: transparent;
+  border: 0;
+  color: var(--ic-link-color, #0374b5);
+  cursor: pointer;
+  font: inherit;
+  min-height: 32px;
+  padding-block: 2px;
+  position: relative;
+  width: 100%;
+}
+
+.mcanvas-course-overflow-toggle .mcanvas-overflow-dots {
+  box-shadow: -6px 0 currentColor, 6px 0 currentColor;
+  height: 3px;
+  inset-inline-start: 16px;
+  transform: translateY(-50%);
+  width: 3px;
+}
+
+.mcanvas-course-overflow-toggle:hover .mcanvas-overflow-dots::after {
+  background: currentColor;
+  content: "";
+  height: 1px;
+  inset-block-start: 8px;
+  inset-inline-start: -8px;
+  position: absolute;
+  width: 19px;
+}
+
 .mcanvas-overflow-toggle {
   background: transparent;
   border: 0;
@@ -136,8 +174,56 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
   align-items: center;
   display: flex;
   gap: 16px;
-  justify-content: space-between;
   margin: 0 0 8px;
+}
+
+.mcanvas-config-context-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.mcanvas-config-context-field label {
+  color: #aeb8c2;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.mcanvas-config-context-field select {
+  appearance: auto;
+  background: #171e25;
+  border: 1px solid #596775;
+  border-radius: 4px;
+  color: #fff;
+  font: inherit;
+  min-height: 36px;
+  padding: 6px 8px;
+  width: 100%;
+}
+
+.mcanvas-config-panel-tabs {
+  border-bottom: 1px solid #3c4a57;
+  display: flex;
+  margin-bottom: 12px;
+}
+
+.mcanvas-config-panel-tabs [role="tab"] {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid #fff;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  margin-bottom: -1px;
+  padding: 7px 4px;
+}
+
+.mcanvas-config-footer {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 
 .mcanvas-config-restore-button {
@@ -159,9 +245,10 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
 
 .mcanvas-config-keyboard-tip {
   color: #8996a3;
+  flex: 1 1 auto;
   font-size: 0.625rem;
   line-height: 1.3;
-  margin: 0 0 20px;
+  margin: 0;
 }
 
 .mcanvas-config-keyboard-tip code {
@@ -221,7 +308,7 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
   gap: 12px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   line-height: 1.4;
-  padding: 10px 4px;
+  padding: 7px 4px;
   touch-action: none;
   transition: background-color 120ms ease-in-out;
   user-select: none;
@@ -285,6 +372,9 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
 
 .mcanvas-navigation-button:focus-visible,
 .mcanvas-overflow-toggle:focus-visible,
+.mcanvas-course-overflow-toggle:focus-visible,
+.mcanvas-config-context-field select:focus-visible,
+.mcanvas-config-panel-tabs [role="tab"]:focus-visible,
 .mcanvas-config-restore-button:focus-visible,
 .mcanvas-config-tab-row:focus-visible,
 .mcanvas-config-tab-row input:focus-visible {
@@ -300,5 +390,14 @@ body.with-right-side:has(#course_home_content) #content-wrapper {
   .mcanvas-config-dialog {
     max-height: calc(100vh - 24px);
     padding: 18px;
+  }
+
+  .mcanvas-config-footer {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+
+  .mcanvas-config-keyboard-tip {
+    align-self: flex-start;
   }
 }
