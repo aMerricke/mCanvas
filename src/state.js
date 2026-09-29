@@ -18,6 +18,7 @@ const COURSE_EXPANSION_KEY_PREFIX = "mcanvas:courseNavigationExpanded:";
 
 const defaultOrder = [];
 const sidebarDefaultOrder = [MCANVAS_TODO_KEY, CANVAS_SIDEBAR_KEY];
+const sidebarDefaultHidden = [CANVAS_SIDEBAR_KEY];
 let navigationModel = [];
 let sidebarModel = [];
 let dialogEscapeHandler;
@@ -33,3 +34,5 @@ let availableCourses = [];
 let courseOverflowExpanded = false;
 let expandedCourseId;
 let activeConfigurationPanel = "navigation";
+let todoAssignments = [];
+let todoAssignmentsState = "loading";

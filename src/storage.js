@@ -31,6 +31,28 @@ function setCourseOverflowExpanded(courseId, expanded) {
   writeExpansionState(courseExpansionKey(courseId), expanded);
 }
 
+function setSyncStorage(values, warning) {
+  try {
+    if (!chrome.runtime?.id) return;
+    chrome.storage.sync.set(values, () => {
+      if (chrome.runtime.lastError) console.warn(warning, chrome.runtime.lastError.message);
+    });
+  } catch (error) {
+    if (error?.message !== "Extension context invalidated.") console.warn(warning, error);
+  }
+}
+
+function removeSyncStorage(key, warning) {
+  try {
+    if (!chrome.runtime?.id) return;
+    chrome.storage.sync.remove(key, () => {
+      if (chrome.runtime.lastError) console.warn(warning, chrome.runtime.lastError.message);
+    });
+  } catch (error) {
+    if (error?.message !== "Extension context invalidated.") console.warn(warning, error);
+  }
+}
+
 function readSettings() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(STORAGE_KEY, (result) => {
@@ -53,16 +75,21 @@ function writeSettings() {
     order: navigationModel.map((item) => item.key),
     overflow: navigationModel.filter((item) => item.visibility === "overflow").map((item) => item.key),
   };
-  chrome.storage.sync.set({ [STORAGE_KEY]: savedSettings }, () => {
-    if (chrome.runtime.lastError) console.warn("mCanvas could not save navigation settings:", chrome.runtime.lastError.message);
-  });
+  setSyncStorage(
+    { [STORAGE_KEY]: savedSettings },
+    "mCanvas could not save navigation settings:"
+  );
 }
 
 function normalizedSidebarSettings(stored) {
   const knownKeys = new Set(sidebarDefaultOrder);
   return {
     order: Array.isArray(stored?.order) ? stored.order.filter((key) => knownKeys.has(key)) : [],
-    hidden: Array.isArray(stored?.hidden) ? stored.hidden.filter((key) => knownKeys.has(key)) : [],
+    hidden: Array.isArray(stored?.hidden)
+      ? stored.hidden.filter((key) => knownKeys.has(key))
+      : stored
+        ? []
+        : [...sidebarDefaultHidden],
   };
 }
 
@@ -84,16 +111,15 @@ function writeSidebarSettings() {
     order: sidebarModel.map((item) => item.key),
     hidden: sidebarModel.filter((item) => item.visibility === "overflow").map((item) => item.key),
   };
-  chrome.storage.sync.set({ [SIDEBAR_STORAGE_KEY]: savedSidebarSettings }, () => {
-    if (chrome.runtime.lastError) console.warn("mCanvas could not save sidebar settings:", chrome.runtime.lastError.message);
-  });
+  setSyncStorage(
+    { [SIDEBAR_STORAGE_KEY]: savedSidebarSettings },
+    "mCanvas could not save sidebar settings:"
+  );
 }
 
 function clearSidebarSettings() {
   savedSidebarSettings = normalizedSidebarSettings();
-  chrome.storage.sync.remove(SIDEBAR_STORAGE_KEY, () => {
-    if (chrome.runtime.lastError) console.warn("mCanvas could not clear sidebar settings:", chrome.runtime.lastError.message);
-  });
+  removeSyncStorage(SIDEBAR_STORAGE_KEY, "mCanvas could not clear sidebar settings:");
 }
 
 function readCourseSettings() {
@@ -131,9 +157,10 @@ function writeCourseSettings(courseId, model) {
       },
     },
   };
-  chrome.storage.sync.set({ [COURSE_STORAGE_KEY]: savedCourseSettings }, () => {
-    if (chrome.runtime.lastError) console.warn("mCanvas could not save course navigation settings:", chrome.runtime.lastError.message);
-  });
+  setSyncStorage(
+    { [COURSE_STORAGE_KEY]: savedCourseSettings },
+    "mCanvas could not save course navigation settings:"
+  );
 }
 
 function clearCourseSettings(courseId) {
@@ -143,7 +170,8 @@ function clearCourseSettings(courseId) {
   savedCourseSettings = { ...savedCourseSettings };
   if (Object.keys(hostSettings).length > 0) savedCourseSettings[host] = hostSettings;
   else delete savedCourseSettings[host];
-  chrome.storage.sync.set({ [COURSE_STORAGE_KEY]: savedCourseSettings }, () => {
-    if (chrome.runtime.lastError) console.warn("mCanvas could not clear course navigation settings:", chrome.runtime.lastError.message);
-  });
+  setSyncStorage(
+    { [COURSE_STORAGE_KEY]: savedCourseSettings },
+    "mCanvas could not clear course navigation settings:"
+  );
 }

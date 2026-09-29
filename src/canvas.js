@@ -205,6 +205,100 @@ function buildSidebarModel() {
     return document.querySelector(SIDEBAR_SELECTOR) || undefined;
   }
 
+  function measureCanvasLayoutWidths() {
+    if (window.innerWidth < 1100 || document.body?.classList.contains("mcanvas-layout-width-measured")) {
+      return;
+    }
+
+    const wrapper = document.querySelector(".ic-Layout-wrapper");
+    const content = document.querySelector("#content-wrapper");
+    const sidebar = sidebarContainer();
+    if (!wrapper || !content || !sidebar) return;
+
+    const nativeMaxWidth = Number.parseFloat(getComputedStyle(wrapper).maxWidth);
+    const marginReservation = Number.parseFloat(getComputedStyle(content).marginRight) || 0;
+    const paddingReservation = Number.parseFloat(getComputedStyle(content).paddingRight) || 0;
+    const wrapperBounds = wrapper.getBoundingClientRect();
+    const contentBounds = content.getBoundingClientRect();
+    const sidebarBounds = sidebar.getBoundingClientRect();
+    const geometricReservation = Math.max(0, wrapperBounds.right - contentBounds.right);
+    const sidebarRegion = Math.max(0, wrapperBounds.right - sidebarBounds.left);
+    const sidebarReservation = Math.max(
+      marginReservation,
+      paddingReservation,
+      geometricReservation,
+      sidebarRegion
+    );
+    if (!Number.isFinite(nativeMaxWidth) || sidebarReservation <= 0) return;
+
+    document.body.style.setProperty(
+      "--mcanvas-native-layout-max-width",
+      `${nativeMaxWidth}px`
+    );
+    document.body.style.setProperty(
+      "--mcanvas-sidebar-reservation",
+      `${sidebarReservation}px`
+    );
+    document.body.classList.add("mcanvas-layout-width-measured");
+  }
+
+  function formatAssignmentDueDate(dueAt) {
+    if (!dueAt) return "No due date";
+    return `Due ${new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(dueAt))}`;
+  }
+
+  function renderTodoAssignments(section) {
+    section.replaceChildren();
+
+    const heading = document.createElement("h2");
+    heading.className = "mcanvas-todo-heading";
+    heading.textContent = "Assignments";
+    section.append(heading);
+
+    if (todoAssignmentsState !== "ready") {
+      const status = document.createElement("p");
+      status.className = "mcanvas-todo-status";
+      status.textContent = todoAssignmentsState === "error"
+        ? "Assignments could not be loaded."
+        : "Loading assignments…";
+      section.append(status);
+      return;
+    }
+
+    if (todoAssignments.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "mcanvas-todo-status";
+      empty.textContent = "No unsubmitted assignments.";
+      section.append(empty);
+      return;
+    }
+
+    const list = document.createElement("ul");
+    list.className = "mcanvas-todo-list";
+    for (const assignment of todoAssignments) {
+      const item = document.createElement("li");
+      item.className = "mcanvas-todo-assignment";
+
+      const title = document.createElement("a");
+      title.className = "mcanvas-todo-title";
+      title.href = assignment.html_url;
+      title.textContent = assignment.name;
+
+      const details = document.createElement("span");
+      details.className = "mcanvas-todo-details";
+      details.textContent = `${assignment.course.name} · ${formatAssignmentDueDate(assignment.due_at)}`;
+
+      item.append(title, details);
+      list.append(item);
+    }
+    section.append(list);
+  }
+
   function ensureTodoPlaceholder(container) {
     const existing = document.querySelector(`${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`);
     if (existing) {
@@ -214,13 +308,26 @@ function buildSidebarModel() {
     const placeholder = document.createElement("section");
     placeholder.className = "mcanvas-todo-placeholder";
     placeholder.dataset.mcanvasOwned = "true";
-    placeholder.setAttribute("aria-label", "To-do list placeholder");
-    placeholder.textContent = "To-do list";
+    placeholder.setAttribute("aria-label", "Unsubmitted assignments");
+    renderTodoAssignments(placeholder);
     container.append(placeholder);
     return placeholder;
   }
 
+  async function loadTodoAssignments() {
+    try {
+      todoAssignments = await fetchUnsubmittedActiveAssignments();
+      todoAssignmentsState = "ready";
+    } catch (error) {
+      todoAssignmentsState = "error";
+      console.warn("mCanvas could not load assignments:", error);
+    }
+    const section = document.querySelector(`${SIDEBAR_SELECTOR} .mcanvas-todo-placeholder`);
+    if (section) renderTodoAssignments(section);
+  }
+
   function applySidebarLayout() {
+    measureCanvasLayoutWidths();
     const container = sidebarContainer();
     if (!container) {
       document.body?.classList.remove("mcanvas-sidebar-empty");
@@ -454,7 +561,10 @@ function buildSidebarModel() {
     let sidebarEditorModel = sidebarModel;
     const sidebarEditorDefaultOrder = [...sidebarDefaultOrder];
     const sidebarEditorDefaultVisibility = new Map(
-      sidebarModel.map((item) => [item.key, "primary"])
+      sidebarModel.map((item) => [
+        item.key,
+        sidebarDefaultHidden.includes(item.key) ? "overflow" : "primary",
+      ])
     );
     if (requestedCourseId) {
       try {
@@ -1153,7 +1263,9 @@ function buildSidebarModel() {
     buildSidebarModel();
     navigationObserver = new MutationObserver(scheduleRefresh);
     navigationObserver.observe(document.documentElement, { childList: true, subtree: true });
+    window.addEventListener("resize", measureCanvasLayoutWidths);
     refreshNavigation();
+    loadTodoAssignments();
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== "sync") return;
