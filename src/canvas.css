@@ -211,6 +211,7 @@ body.with-right-side.mcanvas-sidebar-empty #content-wrapper {
 .mcanvas-config-panel-tabs {
   border-bottom: 1px solid #3c4a57;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 12px;
 }
@@ -228,6 +229,16 @@ body.with-right-side.mcanvas-sidebar-empty #content-wrapper {
 
 .mcanvas-config-panel-tabs [role="tab"][aria-selected="true"] {
   border-bottom-color: #fff;
+}
+
+.mcanvas-config-placeholder-panel {
+  color: #aeb8c2;
+  min-height: 160px;
+  padding: 12px 4px;
+}
+
+.mcanvas-config-placeholder-panel p {
+  margin: 0 0 12px;
 }
 
 .mcanvas-config-footer {
