@@ -1611,8 +1611,8 @@ function buildSidebarModel() {
     loadTodoAssignments();
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "sync") return;
-      if (changes[STORAGE_KEY]) {
+      if (areaName !== "sync" && areaName !== "local") return;
+      if (areaName === "sync" && changes[STORAGE_KEY]) {
         const updated = changes[STORAGE_KEY].newValue;
         const nextSettings = {
           order: Array.isArray(updated?.order) ? updated.order : [],
@@ -1624,7 +1624,7 @@ function buildSidebarModel() {
           refreshNavigation();
         }
       }
-      if (changes[COURSE_STORAGE_KEY]) {
+      if (areaName === "sync" && changes[COURSE_STORAGE_KEY]) {
         const updated = changes[COURSE_STORAGE_KEY].newValue;
         const nextSettings = updated && typeof updated === "object" ? updated : {};
         if (JSON.stringify(nextSettings) !== JSON.stringify(savedCourseSettings)) {
@@ -1633,7 +1633,7 @@ function buildSidebarModel() {
           if (courseId) applyCourseNavigation(courseId);
         }
       }
-      if (changes[SIDEBAR_STORAGE_KEY]) {
+      if (areaName === "sync" && changes[SIDEBAR_STORAGE_KEY]) {
         const nextSettings = normalizedSidebarSettings(changes[SIDEBAR_STORAGE_KEY].newValue);
         if (JSON.stringify(nextSettings) !== JSON.stringify(savedSidebarSettings)) {
           savedSidebarSettings = nextSettings;
@@ -1645,7 +1645,7 @@ function buildSidebarModel() {
           if (section) renderTodoAssignments(section);
         }
       }
-      if (changes[ASSIGNMENT_COMPLETION_STORAGE_KEY]) {
+      if (areaName === "local" && changes[ASSIGNMENT_COMPLETION_STORAGE_KEY]) {
         const nextCompletions = normalizedAssignmentCompletions(
           changes[ASSIGNMENT_COMPLETION_STORAGE_KEY].newValue
         );

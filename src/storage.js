@@ -42,6 +42,23 @@ function setSyncStorage(values, warning) {
   }
 }
 
+function setLocalStorage(values, warning, callback) {
+  try {
+    if (!chrome.runtime?.id) {
+      callback?.(false);
+      return;
+    }
+    chrome.storage.local.set(values, () => {
+      const error = chrome.runtime.lastError;
+      if (error) console.warn(warning, error.message);
+      callback?.(!error);
+    });
+  } catch (error) {
+    if (error?.message !== "Extension context invalidated.") console.warn(warning, error);
+    callback?.(false);
+  }
+}
+
 function readSettings() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(STORAGE_KEY, (result) => {
@@ -196,22 +213,69 @@ function normalizedAssignmentCompletions(stored) {
 
 function readAssignmentCompletions() {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(ASSIGNMENT_COMPLETION_STORAGE_KEY, (result) => {
+    chrome.storage.local.get(ASSIGNMENT_COMPLETION_STORAGE_KEY, (localResult) => {
       if (chrome.runtime.lastError) {
         console.warn(
           "mCanvas could not read assignment completion settings:",
           chrome.runtime.lastError.message
         );
-        resolve({});
+        readLegacyAssignmentCompletions(resolve, false);
         return;
       }
-      resolve(normalizedAssignmentCompletions(result[ASSIGNMENT_COMPLETION_STORAGE_KEY]));
+      if (Object.prototype.hasOwnProperty.call(localResult, ASSIGNMENT_COMPLETION_STORAGE_KEY)) {
+        resolve(normalizedAssignmentCompletions(localResult[ASSIGNMENT_COMPLETION_STORAGE_KEY]));
+        return;
+      }
+      readLegacyAssignmentCompletions(resolve, true);
     });
   });
 }
 
+function readLegacyAssignmentCompletions(resolve, migrate) {
+  chrome.storage.sync.get(ASSIGNMENT_COMPLETION_STORAGE_KEY, (syncResult) => {
+    if (chrome.runtime.lastError) {
+      console.warn(
+        "mCanvas could not read legacy assignment completion settings:",
+        chrome.runtime.lastError.message
+      );
+      resolve({});
+      return;
+    }
+
+    const hasLegacyData = Object.prototype.hasOwnProperty.call(
+      syncResult,
+      ASSIGNMENT_COMPLETION_STORAGE_KEY
+    );
+    const completions = normalizedAssignmentCompletions(
+      syncResult[ASSIGNMENT_COMPLETION_STORAGE_KEY]
+    );
+    if (!migrate || !hasLegacyData) {
+      resolve(completions);
+      return;
+    }
+
+    setLocalStorage(
+      { [ASSIGNMENT_COMPLETION_STORAGE_KEY]: completions },
+      "mCanvas could not migrate assignment completion settings:",
+      (saved) => {
+        if (saved) {
+          chrome.storage.sync.remove(ASSIGNMENT_COMPLETION_STORAGE_KEY, () => {
+            if (chrome.runtime.lastError) {
+              console.warn(
+                "mCanvas could not remove migrated assignment completion settings:",
+                chrome.runtime.lastError.message
+              );
+            }
+          });
+        }
+        resolve(completions);
+      }
+    );
+  });
+}
+
 function writeAssignmentCompletions() {
-  setSyncStorage(
+  setLocalStorage(
     { [ASSIGNMENT_COMPLETION_STORAGE_KEY]: savedAssignmentCompletions },
     "mCanvas could not save assignment completion settings:"
   );
