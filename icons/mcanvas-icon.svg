@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">mCanvas</title>
+  <rect width="1024" height="1024" fill="#11161c"/>
+  <text
+    x="512"
+    y="432"
+    fill="#fff"
+    font-family="ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, monospace"
+    font-size="720"
+    font-weight="700"
+    text-anchor="middle"
+    dominant-baseline="central"
+  >m</text>
+</svg>

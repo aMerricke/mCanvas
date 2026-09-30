@@ -2,7 +2,13 @@
   "manifest_version": 3,
   "name": "mCanvas",
   "version": "0.1.0",
-  "description": "Assignment tracker and customization tools for Canvas LMS.",
+  "description": "Assignment tracker and decluttering tools for the Canvas LMS.",
+  "icons": {
+    "16": "icons/mcanvas-icon-16.png",
+    "32": "icons/mcanvas-icon-32.png",
+    "48": "icons/mcanvas-icon-48.png",
+    "128": "icons/mcanvas-icon-128.png"
+  },
   "permissions": [
     "storage"
   ],
