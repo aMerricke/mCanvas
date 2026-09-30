@@ -1,3 +1,7 @@
+---
+title: mCanvas Privacy Policy
+---
+
 # mCanvas Privacy Policy
 
 **Effective date:** September 29, 2026
