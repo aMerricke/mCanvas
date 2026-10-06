@@ -1,11 +1,11 @@
 # mCanvas
 
-Assignment tracker and configuration tools for the Canvas LMS.
+Assignment tracker and decluttering for the Canvas LMS.
+First released September 2026.
+Open for feedback.
+Possible next feature of color configuration.
 
-Currently in development before first release to the Chrome Web Store.
-
-Planned features of nav bar customization, sidebar customization, color
-customization, and an assignment tracker widget for the sidebar.
+Chrome Web Store Page: https://chromewebstore.google.com/detail/hoaipdhjaggmhmbkchpjkikjnbegabop?utm_source=item-share-cb
 
 ## Motive
 
@@ -27,7 +27,6 @@ and to track assignments centrally.
 
 * Make global navigation menu configurable [done]
 * Make course navigation menus configurable [done]
-* Make global sidebar configurable [done] (not as freely configurable as nav bars)
 * Add dark mode + general color configuration [too hard right now]
 * Add to-do list widget [done]
 
